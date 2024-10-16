@@ -5,11 +5,11 @@ from setuptools import setup
 
 
 setup(
-    name="athena_pp",
+    name="yaaps",
     version="0.0.1",
     author="Maximilian Jacobi",
     author_email="maximilian.jacobi@uni-jena.de",
-    packages=["athena_pp"],
+    packages=["yaaps"],
     license='MIT',
     include_package_data=True,
     install_requires=[
@@ -18,7 +18,8 @@ setup(
         "h5py",
         "matplotlib",
         "tqdm",
-    ],
+        "simtroller"
+   ],
     python_requires='>=3.7',
     description="Routines to post-process and plot output from GRAthena++",
 )
