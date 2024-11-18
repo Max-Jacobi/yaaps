@@ -41,14 +41,12 @@ class Simulation:
         return hst(f"{self.path}/{self.problem_id}.hst")
 
 
-    @property
-    @lru_cache
-    def hst(self) -> dict:
-        return hst(f"{self.path}/{self.problem_id}.hst")
-
-
     def wav(self, radius: float, prefix="wav") -> dict:
         path = f"{self.path}/{prefix}_r{radius:.2f}.txt"
+        return _read_ascii(path)
+
+    def tra(self, index: int, prefix="tra") -> dict:
+        path = f"{self.path}/{prefix}.ext{index}.txt"
         return _read_ascii(path)
 
     def horizon(self, index: int) -> dict:
