@@ -55,7 +55,7 @@ def hst(filename, raw=False):
         header_location = None
         line = data_file.readline()
         while len(line) > 0:
-            if line.startswith('# Athena++ '):
+            if line.startswith('# GR-Athena++ '):
                 if header_found:
                     multiple_headers = True
                 else:
