@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from typing import Callable, Iterable, TYPE_CHECKING, Mapping
 from functools import lru_cache
 
-from matplotlib import animation
 import numpy as  np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
@@ -13,7 +12,7 @@ from matplotlib.figure import Figure
 
 from .decorations import update_color_kwargs
 if TYPE_CHECKING:
-    from .Simulation import Simulation
+    from .simulation import Simulation
 
 Sampling = (str | tuple[str])
 
@@ -97,7 +96,7 @@ class ColorPlot(Plot, ABC):
 
         if cbar is True:
             self.cbar = True
-            self.cax = _make_cax(self.ax)
+            self.cax = make_cax(self.ax)
         elif isinstance(cbar, Axes):
             self.cbar = True
             self.cax = cbar
@@ -151,7 +150,7 @@ class ScatterPlot(Plot, ABC):
 
         if cbar is True:
             self.cbar = True
-            self.cax = _make_cax(self.ax)
+            self.cax = make_cax(self.ax)
         elif isinstance(cbar, Axes):
             self.cbar = True
             self.cax = cbar
@@ -311,7 +310,7 @@ def animate(
             plot.plot(time)
     return FuncAnimation(fig, _ani, frames=times, **kwargs)
 
-def _make_cax(ax: Axes):
+def make_cax(ax: Axes):
     cur_ax = plt.gca()
     pos = ax.get_position()
     right = pos.x1
