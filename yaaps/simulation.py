@@ -7,9 +7,9 @@ import numpy as np
 from simtroller.extensions.gra import scrape_dir_athdf
 
 
-from .Input import Input
+from .input import Input
 from .athena_read import hst
-from .Plot2D import NativeColorPlot
+from .plot2D import NativeColorPlot
 
 class Simulation:
     path: str
