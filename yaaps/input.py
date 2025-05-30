@@ -16,6 +16,8 @@ class Input(Mapping):
             # Skip comments and empty lines
             if '#' in line:
                 line = line[:line.index('#')]
+            if '//' in line:
+                line = line[:line.index('//')]
             if not line:
                 continue
             line = line.strip()

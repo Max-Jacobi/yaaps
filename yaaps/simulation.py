@@ -23,7 +23,11 @@ class Simulation:
         input_path: Optional[str] = None
     ):
         self.path = path
-        self.name = os.path.basename(path)
+        path_split = path.split("/")
+        if ("output-" in path_split[-1]) or ("combine" in path_split[-1]):
+            self.name = path_split[-2]
+        else:
+            self.name = path_split[-1]
         if input_path is None:
             for file in os.listdir(path):
                 if file.endswith('.inp'):
@@ -33,13 +37,18 @@ class Simulation:
                     input_path = os.path.join(path, file)
                     break
         self.input = Input(input_path)
+        rl = self.input[f'trackers_extrema/ref_level'][0]
+        self.dx: list[float] = []
+        for ii in range(1, 4):
+            bb = self.input[f'mesh/x{ii}max'] - self.input[f'mesh/x{ii}min']
+            nx = self.input[f'mesh/nx{ii}']
+            self.dx.append(bb/nx/2**rl)
         self.problem_id = self.input['job/problem_id']
 
     @property
     @lru_cache
     def hst(self) -> dict:
-        return hst(f"{self.path}/{self.problem_id}.hst")
-
+        return _straighten(hst(f"{self.path}/{self.problem_id}.hst"))
 
     def wav(self, radius: float, prefix="wav") -> dict:
         path = f"{self.path}/{prefix}_r{radius:.2f}.txt"
@@ -77,10 +86,23 @@ class Simulation:
         anim = plot.animate(times)
         return anim
 
+def _straighten(data: dict) -> dict:
+    if 'iter' in data:
+        dsort = data['iter']
+    elif 'time' in data:
+        dsort = data['time']
+    else:
+        return data
+    _, isort = np.unique(dsort, return_index=True)
+    return {k: dd[isort] for k, dd in data.items()}
+
 def _read_ascii(path: str) -> dict:
     with open(path, 'r') as f:
-        header = f.readline().split()
-    keys = [hh.split(":")[1] for hh in header[1:]]
+        line = "#"
+        while line.startswith("#"):
+            header = line
+            line = f.readline()
+    keys = [hh.split(":")[1] for hh in header.split()[1:]]
 
     data = np.loadtxt(path, skiprows=1, unpack=True)
-    return dict(zip(keys, data))
+    return _straighten(dict(zip(keys, data)))
