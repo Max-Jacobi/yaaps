@@ -18,7 +18,9 @@ _color_kwargs_default: dict[str, Callable[[dict], dict]] = {
 
 var_alias: dict[str, str] = {
     "rho": "hydro.prim.rho",
+    "p": "hydro.prim.p",
     "ye": "passive_scalar.r_0",
+    "s": "hydro.aux.s",
 }
 
 def update_color_kwargs(var: str, kwargs: dict, data: np.ndarray) -> dict:
