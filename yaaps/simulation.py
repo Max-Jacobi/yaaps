@@ -10,6 +10,7 @@ from simtroller.extensions.gra import scrape_dir_athdf
 from .input import Input
 from .athena_read import hst
 from .plot2D import NativeColorPlot
+from .decorations import var_alias
 
 class Simulation:
     path: str
@@ -75,6 +76,23 @@ class Simulation:
         return [(sampling, ghosts) for (vv, sampling, ghosts)
                 in self.scrape.debug_data_keys().keys()
                 if vv == var]
+
+    def complete_var(self, var: str, sampling: tuple[str, ...]) -> tuple[str, int]:
+        if var in var_alias:
+            var = var_alias[var]
+        sampling = tuple(x[:2] for x in sampling)
+        candidates = [(vv, samp, gh)
+                      for vv, samp, gh in self.scrape.debug_data_keys().keys()
+                      if vv.endswith(var)]
+        if len(candidates) == 0:
+            raise ValueError(f"Can't complete variable {var}.")
+        vcan = [(vv, samp, gh) for vv, samp, gh in candidates if samp==sampling]
+        if len(vcan) > 1:
+            raise ValueError(f"More than one completion of {var} available: {[v for v, *_ in vcan]}")
+        if len(vcan) == 0:
+            raise ValueError(f"Sampling {sampling} not available for variable {var}.\n"
+                             f"Available: {[(v, s) for v, s, _ in candidates]}")
+        return vcan[0][0], vcan[0][2]
 
     def plot2d(self, time: float, *args, **kwargs) -> NativeColorPlot:
         plot = NativeColorPlot(self, *args, **kwargs)

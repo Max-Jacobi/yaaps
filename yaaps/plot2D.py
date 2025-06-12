@@ -56,18 +56,7 @@ class Native(ABC):
             _conv = dict(x='x1v', y='x2v', z='x3v')
             sampling = tuple(_conv[s] for s in sampling)
         self.sampling = tuple(sampling)
-        self.var = var
-        candidates = self.sim.available(self.var)
-        if len(candidates) == 0:
-            raise ValueError(f"Variable {var} not found in {self.sim.path}")
-        for samp, ghosts in candidates:
-            samp = tuple(ss+'v' for ss in samp)
-            if samp == self.sampling:
-                break
-        else:
-            raise ValueError(f"Sampling {self.sampling} not available for variable {self.var}.\n"
-                             f"Available: {candidates}")
-        self.ghosts = ghosts
+        self.var, self.ghosts = sim.complete_var(var, self.sampling)
         self.strip_ghosts = strip_ghosts
 
     @lru_cache(maxsize=1)
@@ -113,6 +102,7 @@ class ColorPlot(Plot, ABC):
         self,
         ax: (Axes | None) = None,
         cbar: (Axes | bool) = True,
+        func: Callable | None = None,
         **kwargs,
         ) -> list[Artist]:
 
@@ -125,6 +115,7 @@ class ColorPlot(Plot, ABC):
             self.cbar = True
             self.cax = cbar
 
+        self.func = func
         self.kwargs = kwargs
         self.ims = []
         return self.ims
@@ -136,14 +127,15 @@ class ColorPlot(Plot, ABC):
         time: float,
         var: str,
         ) -> list[Artist]:
-        fdata = data[np.isfinite(data)]
-        vmin = fdata.min()
-        vmax = fdata.max()
-        self.kwargs = update_color_kwargs(var, self.kwargs, vmin=vmin, vmax=vmax)
+
+        if self.func is not None:
+            data = self.func(data)
+
+        self.kwargs = update_color_kwargs(var, self.kwargs, data=data)
 
         # todo: set axis labels
 
-        # todo: set title
+
         self.ax.set_title(f"{var} @ t= {time:.2f}")
 
         for fd, xx, yy in zip(data, *xyz):
@@ -243,13 +235,11 @@ class NativeColorPlot(Native, ColorPlot, MeshBlockPlot):
         sim: "Simulation",
         var: str,
         sampling: Sampling = ('x1v', 'x2v'),
-        func: Callable | None = None,
         draw_meshblocks: bool = False,
         meshblock_kwargs: dict = {},
         **kwargs
         ):
         self.init_var(sim, var, sampling)
-        self.func = func
 
         self.draw_meshblocks = draw_meshblocks
         if self.draw_meshblocks:
@@ -261,9 +251,6 @@ class NativeColorPlot(Native, ColorPlot, MeshBlockPlot):
     def plot(self, time: float) -> list[Artist]:
         self.clean()
         xyz, data, time = self.load_data(time)
-
-        if self.func is not None:
-            data = self.func(data)
 
         artists = self.make_plot(xyz, data, time, self.var)
 
