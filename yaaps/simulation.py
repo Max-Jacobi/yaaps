@@ -31,13 +31,18 @@ class Simulation:
             self.name = path_split[-1]
         if input_path is None:
             for file in os.listdir(path):
-                if file.endswith('.inp'):
-                    input_path = os.path.join(path, file)
-                    break
-                elif file.endswith('.par'):
-                    input_path = os.path.join(path, file)
-                    break
-        self.input = Input(input_path)
+                if file.endswith('.inp') or file.endswith('.par'):
+                    try:
+                        self.input = Input(os.path.join(path, file))
+                        break
+                    except ValueError:
+                        ...
+            else:
+                raise RuntimeError("Could not find valid parfile")
+        else:
+            self.input = Input(input_path)
+
+
         rl = self.input[f'trackers_extrema/ref_level'][0]
         self.dx: list[float] = []
         for ii in range(1, 4):

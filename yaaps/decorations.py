@@ -13,6 +13,8 @@ def _update_defaults(**default) -> Callable[[dict], dict]:
 _color_kwargs_default: dict[str, Callable[[dict], dict]] = {
     "hydro.prim.rho": _update_defaults(cmap='magma', norm='log'),
     "passive_scalar.r_0": _update_defaults(cmap='coolwarm_r', norm='lin'), # ye
+    "hydro.aux.u_t": _update_defaults(cmap='RdBu', norm='lin', vmin=-1.1, vmax=-.9), # ye
+    "hydro.aux.hu_t": _update_defaults(cmap='managua', norm='lin', vmin=-1.1, vmax=-.9), # ye
     "default": _update_defaults(cmap='viridis', norm='lin'),
 }
 
