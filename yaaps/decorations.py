@@ -33,8 +33,9 @@ def update_color_kwargs(var: str, kwargs: dict, data: np.ndarray) -> dict:
 
     if isinstance(kwargs['norm'], str):
         norm = kwargs.pop('norm', 'lin')
+        fdata = data.copy()
         if 'vmin' not in kwargs or 'vmax' not in kwargs:
-            fdata = data[np.isfinite(data)]
+            fdata = fdata[np.isfinite(data)]
         if norm == 'log':
             fdata = fdata[fdata>0]
 

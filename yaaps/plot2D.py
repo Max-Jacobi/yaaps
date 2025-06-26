@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Callable, Iterable, TYPE_CHECKING, Mapping
+import os
 from functools import lru_cache
 
 import numpy as  np
@@ -363,6 +364,75 @@ def animate(
         return artists
 
     return FuncAnimation(fig, _ani, frames=times, **kwargs)
+
+def save_frames(
+    times: Iterable[float],
+    fig: Figure,
+    plots: tuple,
+    post_draw: Callable[..., list[Artist]] | None = None,
+    output_dir: str = "frames",
+    prefix: str = "frame",
+    dpi: int | None = None,
+    pbar: bool = True,
+    **savefig_kwargs,
+):
+    """
+    Loop over `times`, draw each frame using your plots (and optional post_draw),
+    save to PNGs in `output_dir` with filenames like 'frame0000.png', and then
+    remove the artists before the next frame.
+
+    Parameters
+    ----------
+    times
+        Iterable of time values to draw.
+    fig
+        Matplotlib Figure to draw into.
+    plots
+        Tuple of objects with a .plot(time) method returning a list of Artists.
+    post_draw
+        Optional callable(time) → list of Artists to draw after the plots.
+    output_dir
+        Directory where PNGs will be written (created if necessary).
+    prefix
+        Filename prefix; files are named prefix0000.png, prefix0001.png, …
+    dpi
+        DPI to pass to `fig.savefig`; if None, use default.
+    pbar
+        Whether to show a tqdm progress bar.
+    **savefig_kwargs
+        Any additional kwargs passed to `fig.savefig`.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    total = len(times)
+
+    todo = enumerate(times)
+
+    def bar(it):
+        return tqdm(it, total=total, desc="Saving frames",
+                    unit="frame", leave=False,
+                    disable=pbar)
+
+    def work(it):
+        i, t = it
+        artists = []
+        for plot in plots:
+            artists.extend(plot.plot(t))
+
+        if post_draw is not None:
+            extra = post_draw(t)
+            # allow for single-Artist return
+            if isinstance(extra, list):
+                artists.extend(extra)
+            elif extra is not None:
+                artists.append(extra)
+
+        fname = os.path.join(output_dir, f"{prefix}{i:04d}.png")
+        fig.savefig(fname, dpi=dpi, **savefig_kwargs)
+        return fname
+
+    return list(bar(map(work, todo)))
+
+
 
 def make_cax(ax: Axes):
     cur_ax = plt.gca()
