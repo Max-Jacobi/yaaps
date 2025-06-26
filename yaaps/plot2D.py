@@ -376,41 +376,16 @@ def save_frames(
     pbar: bool = True,
     **savefig_kwargs,
 ):
-    """
-    Loop over `times`, draw each frame using your plots (and optional post_draw),
-    save to PNGs in `output_dir` with filenames like 'frame0000.png', and then
-    remove the artists before the next frame.
 
-    Parameters
-    ----------
-    times
-        Iterable of time values to draw.
-    fig
-        Matplotlib Figure to draw into.
-    plots
-        Tuple of objects with a .plot(time) method returning a list of Artists.
-    post_draw
-        Optional callable(time) → list of Artists to draw after the plots.
-    output_dir
-        Directory where PNGs will be written (created if necessary).
-    prefix
-        Filename prefix; files are named prefix0000.png, prefix0001.png, …
-    dpi
-        DPI to pass to `fig.savefig`; if None, use default.
-    pbar
-        Whether to show a tqdm progress bar.
-    **savefig_kwargs
-        Any additional kwargs passed to `fig.savefig`.
-    """
     os.makedirs(output_dir, exist_ok=True)
     total = len(times)
-
     todo = enumerate(times)
 
-    def bar(it):
-        return tqdm(it, total=total, desc="Saving frames",
-                    unit="frame", leave=False,
-                    disable=pbar)
+    def bar(*args, **kwargs):
+        kwargs = {**dict(total=total, desc="Saving frames",
+                         unit="frame", leave=False, disable=pbar),
+                  **kwargs}
+        return tqdm(*args, **kwargs)
 
     def work(it):
         i, t = it
