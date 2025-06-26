@@ -382,7 +382,7 @@ def save_frames(
     todo = enumerate(times)
 
     def bar(*args, **kwargs):
-        kwargs = {**dict(total=total, desc="Saving frames",
+        kwargs = {**dict(total=total, desc="Saving frames", ncols=0,
                          unit="frame", leave=False, disable=not pbar),
                   **kwargs}
         return tqdm(*args, **kwargs)
