@@ -59,6 +59,9 @@ class Native(ABC):
         self.sampling = tuple(sampling)
         self.var, self.ghosts = sim.complete_var(var, self.sampling)
         self.strip_ghosts = strip_ghosts
+        self.iter_range = np.arange(*sim.scrape.get_iter_range(self.var, self.sampling))
+        out = sim.scrape.get_var_info(self.var, self.sampling)[0]
+        self.time_range = np.array([sim.scrape.get_iter_time(out, it) for it in self.iter_range])
 
     @lru_cache(maxsize=1)
     def load_data(self, time: float) -> tuple:
