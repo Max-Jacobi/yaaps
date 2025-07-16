@@ -119,6 +119,9 @@ class ColorPlot(Plot, ABC):
             self.cbar = True
             self.cax = cbar
 
+        self.ax.set_xlabel(self.sampling[0][:2])
+        self.ax.set_ylabel(self.sampling[1][:2])
+
         self.func = func
         self.kwargs = kwargs
         self.ims = []
@@ -136,9 +139,6 @@ class ColorPlot(Plot, ABC):
             data = self.func(data)
 
         self.kwargs = update_color_kwargs(var, self.kwargs, data=data)
-
-        # todo: set axis labels
-
 
         self.ax.set_title(f"{var} @ t= {time:.2f}")
 
