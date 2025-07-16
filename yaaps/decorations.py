@@ -31,6 +31,9 @@ def update_color_kwargs(var: str, kwargs: dict, data: np.ndarray) -> dict:
     else: # default
         kwargs = _color_kwargs_default['default'](kwargs)
 
+    if 'norm' not in kwargs:
+        kwargs['norm'] = 'lin'
+
     if isinstance(kwargs['norm'], str):
         norm = kwargs.pop('norm', 'lin')
         fdata = data.copy()

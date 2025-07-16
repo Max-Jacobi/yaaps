@@ -17,7 +17,7 @@ from .decorations import update_color_kwargs
 if TYPE_CHECKING:
     from .simulation import Simulation
 
-Sampling = (str | tuple[str])
+Sampling = (str | tuple[str, ...])
 
 ################################################################################
 

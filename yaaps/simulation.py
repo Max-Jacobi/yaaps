@@ -117,7 +117,7 @@ def _straighten(data: dict) -> dict:
     else:
         return data
     _, isort = np.unique(dsort, return_index=True)
-    return {k: dd[isort] for k, dd in data.items()}
+    return {k: np.atleast_1d(dd)[isort] for k, dd in data.items()}
 
 def _read_ascii(path: str) -> dict:
     with open(path, 'r') as f:
