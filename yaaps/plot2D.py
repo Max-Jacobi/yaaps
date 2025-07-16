@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Callable, Iterable, TYPE_CHECKING, Mapping
 import os
 from functools import lru_cache
+from inspect import signature
 
 import numpy as  np
 import matplotlib.pyplot as plt
@@ -42,10 +43,10 @@ class Plot(ABC):
 
 ################################################################################
 
-class Native(ABC):
+class Native:
     ghosts: bool
 
-    def init_var(
+    def __init__(
         self,
         sim: "Simulation",
         var: str,
@@ -78,6 +79,48 @@ class Native(ABC):
         xyz = self.sim.scrape.get_grid(out=out, sampling=self.sampling, iterate=it, strip_dg=strip_dg)
         time = self.sim.scrape.get_iter_time(out, it)
         data = self.sim.scrape.get_var(var=self.var, sampling=self.sampling, iterate=it, strip_dg=dg)
+        return xyz, data, time
+
+################################################################################
+
+class Derived:
+    ghosts: bool
+
+    def __init__(
+        self,
+        sim: "Simulation",
+        var: str,
+        depends: tuple[str, ...],
+        definition: Callable,
+        sampling: Sampling = ('x1v', 'x2v'),
+        strip_ghosts: bool = True,
+        ):
+        self.sim = sim
+        if isinstance(sampling, str):
+            _conv = dict(x='x1v', y='x2v', z='x3v')
+            sampling = tuple(_conv[s] for s in sampling)
+        self.sampling = tuple(sampling)
+        self.var = var
+        self.depends = tuple(Native(sim, dep, sampling) for dep in depends)
+        self.definition = definition
+        self.signature = signature(self.definition)
+        self.strip_ghosts = strip_ghosts
+
+    @lru_cache(maxsize=1)
+    def load_data(self, time: float) -> tuple:
+
+        native_data = [dep.load_data(time) for dep in self.depends]
+        xyzs = [nd[0] for nd in native_data]
+        datas = [nd[1] for nd in native_data]
+        times = [nd[2] for nd in native_data]
+
+        xyz = xyzs[0]
+        time = times[0]
+        if not all(np.isclose(time, t) for t in times[1:]):
+            raise RuntimeError(f"Not all dependencies for {self.var} have the same time slicing!")
+        kwargs = {name: value for name, value in (('xyz', xyz), ('time', time))
+                  if name in self.signature.parameters}
+        data = self.definition(*datas, **kwargs)
         return xyz, data, time
 
 ################################################################################
@@ -243,7 +286,7 @@ class NativeColorPlot(Native, ColorPlot, MeshBlockPlot):
         meshblock_kwargs: dict = {},
         **kwargs
         ):
-        self.init_var(sim, var, sampling)
+        super().__init__(sim, var, sampling)
 
         self.draw_meshblocks = draw_meshblocks
         if self.draw_meshblocks:
@@ -271,6 +314,30 @@ class NativeColorPlot(Native, ColorPlot, MeshBlockPlot):
             self.collection.remove()
         if self.cbar:
             self.cax.clear()
+
+################################################################################
+
+class DerivedColorPlot(Derived, NativeColorPlot):
+
+    def __init__(
+        self,
+        sim: "Simulation",
+        var: str,
+        depends: tuple[str, ...],
+        definition: Callable,
+        sampling: Sampling = ('x1v', 'x2v'),
+        draw_meshblocks: bool = False,
+        meshblock_kwargs: dict = {},
+        **kwargs
+        ):
+        super().__init__(sim, var, depends, definition, sampling)
+
+        self.draw_meshblocks = draw_meshblocks
+        if self.draw_meshblocks:
+            self.init_meshblocks(**meshblock_kwargs)
+
+        self.init_plot(**kwargs)
+        self.ax.set_aspect('equal')
 
 ################################################################################
 
