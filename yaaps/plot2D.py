@@ -81,6 +81,9 @@ class Native:
         data = self.sim.scrape.get_var(var=self.var, sampling=self.sampling, iterate=it, strip_dg=dg)
         return xyz, data, time
 
+    def __repr__(self):
+        return f"<Native({self.var})>"
+
 ################################################################################
 
 class Derived:
@@ -106,6 +109,12 @@ class Derived:
         self.signature = signature(self.definition)
         self.strip_ghosts = strip_ghosts
 
+        self.iter_range = np.array([it for it in self.depends[0].iter_range
+                                    if all(np.isclose(it, dep.iter_range).any()
+                                           for dep in self.depends[1:])])
+        out = sim.scrape.get_var_info(self.depends[0].var, self.sampling)[0]
+        self.time_range = np.array([sim.scrape.get_iter_time(out, it) for it in self.iter_range])
+
     @lru_cache(maxsize=1)
     def load_data(self, time: float) -> tuple:
 
@@ -122,6 +131,9 @@ class Derived:
                   if name in self.signature.parameters}
         data = self.definition(*datas, **kwargs)
         return xyz, data, time
+
+    def __repr__(self):
+        return f"<Derived({self.var})>"
 
 ################################################################################
 
