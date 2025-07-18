@@ -15,6 +15,7 @@ from matplotlib.artist import Artist
 from tqdm import tqdm
 
 from .decorations import update_color_kwargs
+from .recipes2D import *
 if TYPE_CHECKING:
     from .simulation import Simulation
 
@@ -127,7 +128,7 @@ class Derived:
         time = times[0]
         if not all(np.isclose(time, t) for t in times[1:]):
             raise RuntimeError(f"Not all dependencies for {self.var} have the same time slicing!")
-        kwargs = {name: value for name, value in (('xyz', xyz), ('time', time))
+        kwargs = {name: value for name, value in (('xyz', xyz), ('time', time), ('sampling', self.sampling))
                   if name in self.signature.parameters}
         data = self.definition(*datas, **kwargs)
         return xyz, data, time
