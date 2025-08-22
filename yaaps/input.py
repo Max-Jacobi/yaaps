@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from typing import Any
 import numpy as np
 
-max_inp_len = 1000
+max_inp_len = 10000
 
 class Input(Mapping):
     def __init__(self, file_path):

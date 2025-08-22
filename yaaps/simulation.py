@@ -43,7 +43,16 @@ class Simulation:
             self.input = Input(input_path)
 
 
-        rl = self.input[f'trackers_extrema/ref_level'][0]
+        rl  = 0
+        if 'trackers_extrema/ref_level' in self.input:
+            rl = self.input['trackers_extrema/ref_level'][0]
+        else:
+            for i_track in range(5):
+                if f'trackers_extrema/ref_level_{i_track}' not in self.input:
+                    break
+                if f'trackers_extrema/ref_type_{i_track}' == 2:
+                    continue
+                rl = max(rl, self.input[f'trackers_extrema/ref_level_{i_track}'][0])
         self.dx: list[float] = []
         for ii in range(1, 4):
             bb = self.input[f'mesh/x{ii}max'] - self.input[f'mesh/x{ii}min']

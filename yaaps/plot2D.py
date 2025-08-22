@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Iterable, TYPE_CHECKING, Mapping
+from typing import Callable, Sequence, TYPE_CHECKING, Mapping
 import os
 from functools import lru_cache
 from inspect import signature
@@ -67,6 +67,7 @@ class Native:
 
     @lru_cache(maxsize=1)
     def load_data(self, time: float) -> tuple:
+        tin = time
         it = self.sim.scrape.get_iter_from_time(self.var, self.sampling, time, self.ghosts)
 
         out, _, dg, _ = self.sim.scrape.get_var_info(
@@ -205,9 +206,7 @@ class ColorPlot(Plot, ABC):
         return self.ims
 
 
-    def clean(
-        self,
-        ):
+    def clean(self):
         for im in self.ims:
             im.remove()
         self.ims = []
@@ -278,6 +277,8 @@ class MeshBlockPlot(Plot, ABC):
         self.mb_kwargs.setdefault('facecolor', 'none')
         self.mb_kwargs.setdefault('linewidth', 0.5)
         self.mb_kwargs.setdefault('alpha', 0.5)
+        self.collection = PatchCollection([], match_original=True)
+        self.ax.add_collection(self.collection)
 
     def plot_meshblocks(self, xyz) -> list[Artist]:
         coll = [Rectangle((x1[0], x2[0]), x1[-1]-x1[0], x2[-1]-x2[0], **self.mb_kwargs)
@@ -285,6 +286,9 @@ class MeshBlockPlot(Plot, ABC):
         self.collection = PatchCollection(coll, match_original=True)
         self.ax.add_collection(self.collection)
         return [self.collection]
+
+    def clean(self):
+        self.collection.remove()
 
 ################################################################################
 
@@ -314,7 +318,6 @@ class NativeColorPlot(Native, ColorPlot, MeshBlockPlot):
 
         artists = self.make_plot(xyz, data, time, self.var)
 
-
         if self.cbar:
             plt.colorbar(self.ims[-1], cax=self.cax, )
         if self.draw_meshblocks:
@@ -323,8 +326,6 @@ class NativeColorPlot(Native, ColorPlot, MeshBlockPlot):
 
     def clean(self):
         super().clean()
-        if self.draw_meshblocks:
-            self.collection.remove()
         if self.cbar:
             self.cax.clear()
 
@@ -415,10 +416,10 @@ class TracerPlot(ScatterPlot):
         return self.make_plot((self.x, self.y), c=self.c, time=time)
 
 def animate(
-    times: Iterable[float],
+    times: Sequence[float],
     fig: Figure,
     plots: tuple[Plot, ...],
-    post_draw: (Callable[..., Iterable[Artist]] | None) = None,
+    post_draw: (Callable[..., Sequence[Artist]] | None) = None,
     pbar: bool = True,
     **kwargs,
 ):
@@ -449,7 +450,7 @@ def animate(
     return FuncAnimation(fig, _ani, frames=times, **kwargs)
 
 def save_frames(
-    times: Iterable[float],
+    times: Sequence[float],
     fig: Figure,
     plots: tuple,
     post_draw: Callable[..., list[Artist]] | None = None,
