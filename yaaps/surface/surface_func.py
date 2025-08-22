@@ -37,7 +37,6 @@ def get_func(func: (str | SurfaceFunc[AnyField])) -> SurfaceFunc[AnyField]:
     return func
 
 
-
 class DerivedSurfaceFunc[R](SurfaceFunc):
     def __init__(
         self,
@@ -59,19 +58,13 @@ class DerivedSurfaceFunc[R](SurfaceFunc):
 
         self.bare_idx = tuple((b, tuple(self.keys.index(k) for k in b.keys))
                              for b in self.bare_funcs)
-        self.idx = tuple((f, self.bare_funcs.index(f), b) if (b := f in self.bare_funcs) else
-                         (f, self.derived_funcs.index(f), b) for f in self.dependence)
 
     def __call__(self, *args) -> R:
         res = {b: b(*(args[i] for i in ik)) for b, ik in self.bare_idx}
         def _get_args(f):
-            a = []
-            for d in f.dependence:
-                if d in res:
-                    a.append(res[d])
-                else:
-                    a.append(d._func(*_get_args(d), **d.kwargs))
-            return a
+            return [res[d] if d in res
+                    else d._func(*_get_args(d), **d.kwargs)
+                    for d in f.dependence]
         return self._func(*_get_args(self), **self.kwargs)
 
     @staticmethod

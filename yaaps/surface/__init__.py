@@ -39,6 +39,7 @@ class Surfaces(Mapping):
             desc='Parsing files',
             unit='files',
             args=(self.i_r, ),
+            ordered=True,
             ):
             if np.isnan(self.r):
                 self.r = _r
