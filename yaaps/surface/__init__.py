@@ -13,13 +13,13 @@ class Surfaces(Mapping):
 
     def __init__(
         self,
-        path: str,
+        paths: Iterable[str],
         i_surface: int,
         i_radius: int,
         n_cpu: int = 1,
         verbose: bool = False,
         ):
-        self.path = path
+        self.paths = paths
         self.i_s = int(i_surface)
         self.i_r = int(i_radius)
         self.n_cpu = n_cpu
@@ -29,7 +29,9 @@ class Surfaces(Mapping):
     def _parse_files(self):
         times = []
         self.r = np.nan
-        self.files = np.array([f'{self.path}/{f}' for f in os.listdir(self.path)
+        self.files = np.array([f'{path}/{f}'
+                               for path in self.paths
+                               for f in os.listdir(path)
                                if f".surface{self.i_s}." in f])
         for _r, _t, _ph, _th, _fields in do_parallel(
             parse_h5,
@@ -126,7 +128,7 @@ class Surfaces(Mapping):
         return self._getmany(keys)
 
     def __str__(self) -> str:
-        return f"Surface({self.i_r:06d}) in {self.path}"
+        return f"Surface(s{self.i_s:d} r{self.i_r:d})"
 
     def __repr__(self) -> str:
         return str(self)
