@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yaaps"
+version = "0.0.1"
+description = "Routines to post-process and plot output from GRAthena++"
+authors = [
+    { name = "Maximilian Jacobi", email = "maximilian.jacobi@uni-jena.de" }
+]
+license = { text = "MIT" }
+requires-python = ">=3.7"
+
+dependencies = [
+    "numpy",
+    "scipy",
+    "h5py",
+    "matplotlib",
+    "tqdm",
+    "simtroller",
+    "tabulatedEOS @ git+https://github.com/max-jacobi/tabulatedEOS@master"
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["yaaps*"]
