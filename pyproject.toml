@@ -19,7 +19,6 @@ dependencies = [
     "matplotlib",
     "tqdm",
     "simtroller",
-    "tabulatedEOS @ git+https://github.com/max-jacobi/tabulatedEOS@master"
 ]
 
 [tool.setuptools]
