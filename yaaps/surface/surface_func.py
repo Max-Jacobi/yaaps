@@ -326,9 +326,10 @@ def _hist(
     dA: Vector_d,
     func: AnyField,
     crit: Scalar,
+    dt: Scalar,
     **kwargs
     ) -> Histogram:
-    f_r = (mass_flux*dA).sum(0) * crit
+    f_r = (mass_flux*dA*dt).sum(0) * crit
     return np.histogram(func.flatten(), weights=f_r.flatten(), **kwargs)
 
 def _hist_out(
@@ -336,9 +337,10 @@ def _hist_out(
     dA: Vector_d,
     func: AnyField,
     crit: Scalar,
+    dt: Scalar,
     **kwargs
     ) -> Histogram:
-    f_r = (mass_flux*dA).sum(0) * crit
+    f_r = (mass_flux*dA*dt).sum(0) * crit
     f_r = np.clip(f_r, 0, None)
     return np.histogram(func.flatten(), weights=f_r.flatten(), **kwargs)
 
@@ -353,7 +355,7 @@ def mass_histogram(
     hist = _hist_out if out else _hist
     _func = get_func(func)
     name = f"Histogram({_func.name})"
-    return DerivedSurfaceFunc((mass_flux, dA_d, _func, c), hist, name, **kwargs)
+    return DerivedSurfaceFunc((mass_flux, dA_d, _func, c, 'dt'), hist, name, **kwargs)
 
 ################################################################################
 

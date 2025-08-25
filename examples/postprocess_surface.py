@@ -121,6 +121,7 @@ if args.nu_energies:
         surf_funcs[f'sc_nu{inu}_en'] = sf.nu_e[inu]
 
 all_funcs = sf.get_many(surf_funcs.values())
+all_funcs.name = 'surface reductions'
 
 data: dict[str, Any] = {k: [] for k in surf_funcs}
 for raw_data in s.process_h5_parallel((all_funcs,), ordered=True):

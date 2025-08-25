@@ -64,6 +64,9 @@ class Surfaces(Mapping):
         isort = np.argsort(times)
         self.files = self.files[isort]
         self.times = np.array(times)[isort]
+        dt = np.diff(self.times)
+        assert np.all(np.isclose(dt, dt[0])), 'detected changing surface output dt'
+        dt = dt[0]
         dth, dph = th[1] - th[0], ph[1] - ph[0]
         m_th, m_ph = np.meshgrid(th, ph, indexing='ij')
         dA = self.r * self.r * np.sin(m_th) * dth * dph
@@ -71,10 +74,11 @@ class Surfaces(Mapping):
         y = self.r * np.sin(m_th) * np.sin(m_ph)
         z = self.r * np.cos(m_th)
         r = np.full_like(x, self.r)
+        dt = np.full_like(x, dt)
 
         self.aux = {"x": x, "y": y, "z": z,
                     "r": r, "ph": m_ph, "th": m_th,
-                    "dA": dA}
+                    "dA": dA, "dt": dt}
 
         self.shape = (len(self.times), *x.shape)
 
@@ -154,7 +158,7 @@ class Surfaces(Mapping):
             n_cpu=self.n_cpu,
             args=(inputs, self.aux, _funcs,),
             verbose=self.verbose,
-            desc=f'Calculating {[func.name for func in _funcs]}:',
+            desc=f'Calculating {" ".join([func.name for func in _funcs])}',
             unit='files',
             ordered=ordered,
             )

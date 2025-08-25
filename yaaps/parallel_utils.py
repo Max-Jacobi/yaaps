@@ -2,7 +2,7 @@ from multiprocessing import Pool
 from sys import stdout
 from typing import Callable, Iterable, Sized, Any
 from functools import partial
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 
 ################################################################################
@@ -26,15 +26,18 @@ def do_parallel[R](
     kwargs.setdefault("disable", not verbose)
     kwargs.setdefault("ncols", 0)
     kwargs.setdefault("file", stdout)
+    kwargs.setdefault("position", 0)
+    kwargs.setdefault("ascii", True)
 
     func_args = partial(_apply_tail, func, args)
 
     if n_cpu == 1:
-        return tqdm(map(func_args, itr), **kwargs)
-    pool = Pool(n_cpu)
-    if ordered:
-        return tqdm(pool.imap(func_args, itr), **kwargs)
-    return tqdm(pool.imap_unordered(func_args, itr), **kwargs)
+        yield from tqdm(map(func_args, itr), **kwargs)
+        return
+    with Pool(n_cpu) as pool:
+        if ordered:
+            yield from tqdm(pool.imap(func_args, itr), **kwargs)
+        yield from tqdm(pool.imap_unordered(func_args, itr), **kwargs)
 
 def _index_then_apply[T, R](ix_x: tuple[int, T], func: Callable[..., R], tail: tuple[Any, ...]) -> tuple[int, R]:
     i, x = ix_x
