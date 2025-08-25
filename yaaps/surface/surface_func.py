@@ -2,6 +2,8 @@ import numpy as np
 from typing import Callable, Literal, Iterable, Final
 from operator import truediv
 
+from tabulatedEOS.PyCompOSEEOS import PyCompOSEEOS
+
 ################################################################################
 
 Scalar = np.ndarray[tuple[int, int], np.dtype[np.float64]]
@@ -29,8 +31,15 @@ class SurfaceFunc[R]:
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}({self.name})>"
 
+    def __hash__(self):
+        return hash((self.name, tuple(self.kwargs)))
+
+    def __eq__(self, other):
+        return (self.name, self.kwargs) == (other.name, other.kwargs)
+
 def _id(arg: AnyField) -> AnyField:
     return arg
+
 def get_func(func: (str | SurfaceFunc[AnyField])) -> SurfaceFunc[AnyField]:
     if isinstance(func, str):
         return SurfaceFunc(_id, (func, ), func)
@@ -45,7 +54,7 @@ class DerivedSurfaceFunc[R](SurfaceFunc):
         name: str,
         **kwargs
         ):
-        self.dependence = tuple(funcs)
+        self.dependence = tuple(get_func(f) for f in funcs)
 
         keys, bare_funcs, derived_funcs = set(), set(), set()
 
@@ -62,9 +71,13 @@ class DerivedSurfaceFunc[R](SurfaceFunc):
     def __call__(self, *args) -> R:
         res = {b: b(*(args[i] for i in ik)) for b, ik in self.bare_idx}
         def _get_args(f):
-            return [res[d] if d in res
-                    else d._func(*_get_args(d), **d.kwargs)
-                    for d in f.dependence]
+            try:
+                return [res[d] if d in res
+                        else d._func(*_get_args(d), **d.kwargs)
+                        for d in f.dependence]
+            except AttributeError as e:
+                breakpoint()
+                raise
         return self._func(*_get_args(self), **self.kwargs)
 
     @staticmethod
@@ -208,6 +221,19 @@ def _nu_lum_keys(inu: int) -> tuple[str, ...]:
 nu0_lum_flux = SurfaceFunc(_nu_lum_flux, _nu_lum_keys(0), "nu_lum_00")
 nu1_lum_flux = SurfaceFunc(_nu_lum_flux, _nu_lum_keys(1), "nu_lum_01")
 nu2_lum_flux = SurfaceFunc(_nu_lum_flux, _nu_lum_keys(2), "nu_lum_02")
+
+################################################################################
+
+def _vel(util_u_x, util_u_y, util_u_z, W) -> Vector_u:
+    uu = np.array((util_u_x, util_u_y, util_u_z))
+    return uu/W
+
+vel =  SurfaceFunc(
+    _vel,
+    ("hydro.prim.util_u_1", "hydro.prim.util_u_2", "hydro.prim.util_u_3",
+     "hydro.aux.W"),
+    "v_u",
+    )
 
 ################################################################################
 
@@ -360,6 +386,47 @@ vinf = {c: SurfaceFunc(_vinf, (_ut(c),), 'vinf_b') for c in ("bernoulli", "geode
 
 ################################################################################
 
+def _tau(
+    rad: Scalar,
+    vel: Scalar,
+    ) -> Scalar:
+    res = np.zeros_like(rad)
+    m = vel > 0
+    res[m] = (np.e/3.0) * (rad[m]/vel[m])
+    breakpoint()
+    return res
+
+tau = DerivedSurfaceFunc(('r', radial_projection(vel)), _tau, 'tau',)
+
+def _tau_backtrack(
+    ye: Scalar,
+    entr: Scalar,
+    rad: Scalar,
+    vel: Scalar,
+    rho_0: Scalar,
+    eos: PyCompOSEEOS,
+    temp_target: float,
+    ) -> Scalar:
+
+    temp_b = np.full_like(ye, temp_target)
+    rho_b = eos.inverse_call(ye=ye, entr=entr, temp=temp_b)
+    tau_0 = np.zeros_like(rad)
+    m = vel > 0
+    tau_0[m] = (np.e/3.0) * (rad[m]/vel[m])
+    return tau_0 * (rho_0/rho_b)**(1.0/3.0)
+
+def tau_b(temp_target: float, eos: PyCompOSEEOS):
+    return DerivedSurfaceFunc(
+        ('passive_scalars.r_0', 'hydro.aux.s', 'r',
+         radial_projection(vel), 'hydro.prim.rho'),
+        _tau_backtrack,
+        f'tau_backtrack@{temp_target:f}',
+        eos=eos,
+        temp_target=temp_target,
+        )
+
+################################################################################
+
 def wmdot(w: SurfaceFunc[AnyField] | str | None) -> dict[str, SurfaceFunc[float]]:
     return {
         'none': integrate_flux(mass_flux, weight=w),
@@ -381,6 +448,7 @@ def hist(w: SurfaceFunc[AnyField] | str, **kwargs) -> dict[str, SurfaceFunc[Hist
         "bernoulli_out": mass_histogram(w, crit="hydro.aux.hu_t", out=True, **kwargs),
         "geodesic_out": mass_histogram(w, crit="hydro.aux.u_t", out=True, **kwargs),
         }
+
 ################################################################################
 
 nu0_lum = integrate_flux(nu0_lum_flux)

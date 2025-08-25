@@ -4,6 +4,7 @@ from typing import Sequence, Iterable
 from functools import cached_property, cached_property
 
 import numpy as np
+from tabulatedEOS.PyCompOSEEOS import PyCompOSEEOS
 
 from ..parallel_utils import do_parallel, do_parallel_enumerate
 from .h5_utils import apply_func_to_h5, parse_h5, load_h5_many, load_h5_single
@@ -18,12 +19,17 @@ class Surfaces(Mapping):
         i_radius: int,
         n_cpu: int = 1,
         verbose: bool = False,
+        eos_path: None | str = None
         ):
         self.paths = paths
         self.i_s = int(i_surface)
         self.i_r = int(i_radius)
         self.n_cpu = n_cpu
         self.verbose = verbose
+        if eos_path is None:
+            self.eos = None
+        else:
+            self.eos = PyCompOSEEOS(eos_path, code_units="GeometricSolar")
         self._parse_files()
 
     def _parse_files(self):
@@ -33,6 +39,7 @@ class Surfaces(Mapping):
                                for path in self.paths
                                for f in os.listdir(path)
                                if f".surface{self.i_s}." in f])
+
         for _r, _t, _ph, _th, _fields in do_parallel(
             parse_h5,
             self.files,
@@ -63,9 +70,10 @@ class Surfaces(Mapping):
         x = self.r * np.sin(m_th) * np.cos(m_ph)
         y = self.r * np.sin(m_th) * np.sin(m_ph)
         z = self.r * np.cos(m_th)
+        r = np.full_like(x, self.r)
 
         self.aux = {"x": x, "y": y, "z": z,
-                    "ph": m_ph, "th": m_th,
+                    "r": r, "ph": m_ph, "th": m_th,
                     "dA": dA}
 
         self.shape = (len(self.times), *x.shape)
@@ -74,7 +82,7 @@ class Surfaces(Mapping):
     def dA_d(self) -> tuple[Vector_d, ...]:
         return tuple(dA[0] for dA in self.process_h5_parallel((dA_d, )))
 
-    def complete_dset(self, key: str):
+    def complete_input(self, key: str):
         return self.fields.get(key, key)
 
     def __iter__(self):
@@ -94,7 +102,7 @@ class Surfaces(Mapping):
             load_h5_single,
             self.files,
             n_cpu=self.n_cpu,
-            args=(self.complete_dset(key), ),
+            args=(self.complete_input(key), ),
             verbose=self.verbose,
             desc=f'Loading {key}',
             unit='files',
@@ -110,7 +118,7 @@ class Surfaces(Mapping):
             load_h5_many,
             self.files,
             n_cpu=self.n_cpu,
-            args=([self.complete_dset(k) for k in keys if k not in self.aux], ),
+            args=([self.complete_input(k) for k in keys if k not in self.aux], ),
             verbose=self.verbose,
             desc=f'Loading {keys}',
             unit='files',
@@ -138,13 +146,13 @@ class Surfaces(Mapping):
         funcs: tuple[(SurfaceFunc | str), ...],
         ordered: bool = False,
         ) -> Iterable[tuple]:
-        _funcs = tuple(get_func(f) if isinstance(f, str) else f for f in funcs)
-        dsets = tuple(tuple(self.complete_dset(k) for k in func.keys) for func in _funcs)
+        _funcs = tuple(get_func(f) for f in funcs)
+        inputs = tuple(tuple(self.complete_input(k) for k in func.keys) for func in _funcs)
         return do_parallel(
             apply_func_to_h5,
             self.files,
             n_cpu=self.n_cpu,
-            args=(dsets, self.aux, _funcs,),
+            args=(inputs, self.aux, _funcs,),
             verbose=self.verbose,
             desc=f'Calculating {[func.name for func in _funcs]}:',
             unit='files',

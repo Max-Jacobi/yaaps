@@ -16,8 +16,8 @@ from yaaps.surface import surface_func as sf
 parser = argparse.ArgumentParser(
     description="Postprocessing for surface outputs"
 )
-# parser.add_argument("-e", "--eos", default=None, type=str,
-#                     help="EOS table in pycompose format")
+parser.add_argument("-E", "--eos", default=None, type=str,
+                    help="EOS table in pycompose format")
 parser.add_argument("simpath", type=str, help="Path to simulation")
 parser.add_argument("-o", "--outputpath", default=None,
                     help="Directory to output to")
@@ -41,6 +41,8 @@ parser.add_argument("-l", "--nu_luminosities", action="store_true",
                     help="Calculate neutrino luminosities")
 parser.add_argument("-e", "--nu_energies", action="store_true",
                     help="Calculate neutrino energies")
+parser.add_argument("-b", "--backtrack_temp", type=float, default=8.0,
+                    help="Temperature for backtracking in GK. Default=8")
 parser.add_argument("-n", "--ncpu", default=1, type=int,
                     help="Number of cores to use")
 parser.add_argument("-v", "--verbose", action="store_true",
@@ -60,23 +62,39 @@ bins = {
     "vinf": np.linspace(0, 1, 101),
     "hydro.aux.s": np.linspace(0, 250, 101),
     "hydro.aux.T": np.linspace(0, 1, 101),
+    "tau": np.geomspace(20.3, 20300., 101),
+    "tau_b": np.geomspace(20.3, 20300., 101),
     }
 
 ################################################################################
 
-paths = [d for d in os.listdir(args.simpath)
-         if os.path.isdir(f"{args.simpath}/{d}")]
+paths = [f"{args.simpath}/{d}" for d in os.listdir(args.simpath)
+         if (os.path.isdir(f"{args.simpath}/{d}")
+             and d.startswith('output-'))]
 
-s = Surfaces(paths, args.isurf, args.irad, n_cpu=args.ncpu, verbose=args.verbose,)
+temp_bt = args.backtrack_temp / 11.60452
+
+s = Surfaces(
+    paths,
+    args.isurf,
+    args.irad,
+    n_cpu=args.ncpu,
+    verbose=args.verbose,
+    eos_path=args.eos,
+    )
 dt = s.times[1] - s.times[0]
 
 ################################################################################
 
-def _check_vinf(f: str, crit: str) -> str | sf.SurfaceFunc:
+def _check_extra(f: str, crit: str) -> str | sf.SurfaceFunc:
         if f == 'vinf':
             if 'bernoulli' in crit:
                 return sf.vinf['bernoulli']
             return sf.vinf['geodesic']
+        if f == 'tau':
+            return sf.tau
+        if f == 'tau_b':
+            return sf.tau_b(temp_bt, s.eos)
         return f
 
 surf_funcs = {}
@@ -85,10 +103,10 @@ for crit in args.criteria:
     if args.mass_ejection:
         surf_funcs[f'sc_mdot_{crit}'] = sf.mdot[crit]
     for f in args.weighted_averages:
-        _f = _check_vinf(f, crit)
+        _f = _check_extra(f, crit)
         surf_funcs[f'sc_mdot_{f}_{crit}'] = sf.wmdot(_f)[crit]
     for f in args.histograms:
-        _f = _check_vinf(f, crit)
+        _f = _check_extra(f, crit)
         surf_funcs[f'hist_{f}_{crit}'] = sf.hist(_f, bins=bins[f])[crit]
 
 if args.nu_luminosities:
