@@ -55,16 +55,6 @@ if args.outputpath is None:
 
 os.makedirs(args.outputpath, exist_ok=True)
 
-################################################################################
-
-bins = {
-    "passive_scalars.r_0": np.linspace(0, 0.65, 66),
-    "vinf": np.linspace(0, 1, 101),
-    "hydro.aux.s": np.linspace(0, 250, 101),
-    "hydro.aux.T": np.linspace(0, 1, 101),
-    "tau": np.geomspace(20.3, 20300., 101),
-    "tau_b": np.geomspace(20.3, 20300., 101),
-    }
 
 ################################################################################
 
@@ -83,6 +73,19 @@ s = Surfaces(
     eos_path=args.eos,
     )
 dt = s.times[1] - s.times[0]
+
+################################################################################
+
+bins = {
+    "passive_scalars.r_0": np.linspace(0, 0.65, 66),
+    "vinf": np.linspace(0, 1, 101),
+    "hydro.aux.s": np.linspace(0, 250, 101),
+    "hydro.aux.T": np.linspace(0, 1, 101),
+    "tau": np.geomspace(20.3, 20300., 101),
+    "tau_b": np.geomspace(20.3, 20300., 101),
+    "ph": np.linspace(0, 2*np.pi, len(s.aux['ph'])+1),
+    "th": np.linspace(0, np.pi, len(s.aux['th'])+1),
+    }
 
 ################################################################################
 

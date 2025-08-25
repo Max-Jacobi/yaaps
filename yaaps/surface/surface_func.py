@@ -71,13 +71,9 @@ class DerivedSurfaceFunc[R](SurfaceFunc):
     def __call__(self, *args) -> R:
         res = {b: b(*(args[i] for i in ik)) for b, ik in self.bare_idx}
         def _get_args(f):
-            try:
-                return [res[d] if d in res
-                        else d._func(*_get_args(d), **d.kwargs)
-                        for d in f.dependence]
-            except AttributeError as e:
-                breakpoint()
-                raise
+            return [res[d] if d in res
+                    else d._func(*_get_args(d), **d.kwargs)
+                    for d in f.dependence]
         return self._func(*_get_args(self), **self.kwargs)
 
     @staticmethod
@@ -393,7 +389,6 @@ def _tau(
     res = np.zeros_like(rad)
     m = vel > 0
     res[m] = (np.e/3.0) * (rad[m]/vel[m])
-    breakpoint()
     return res
 
 tau = DerivedSurfaceFunc(('r', radial_projection(vel)), _tau, 'tau',)
