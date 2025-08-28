@@ -25,7 +25,7 @@ class Simulation:
     ):
         self.path = path
         path_split = path.split("/")
-        if ("output-" in path_split[-1]) or ("combine" in path_split[-1]):
+        if (("output-" in path_split[-1]) or ("combine" in path_split[-1])) and len(path_split) > 1:
             self.name = path_split[-2]
         else:
             self.name = path_split[-1]
