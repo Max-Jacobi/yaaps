@@ -196,13 +196,13 @@ class ColorPlot(Plot, ABC):
         if self.func is not None:
             data = self.func(data)
 
-        kwargs = update_color_kwargs(var, self.kwargs, data=data)
+        self.kwargs = update_color_kwargs(var, self.kwargs, data=data)
 
         self.ax.set_title(f"{var} @ t= {time:.2f}")
 
         for fd, xx, yy in zip(data, *xyz):
             coords = np.meshgrid(xx, yy, indexing='ij')
-            self.ims.append(self.ax.pcolormesh(*coords, fd, **kwargs))
+            self.ims.append(self.ax.pcolormesh(*coords, fd, **self.kwargs))
 
         return self.ims
 

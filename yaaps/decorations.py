@@ -62,4 +62,7 @@ def update_color_kwargs(var: str, kwargs: dict, data: np.ndarray) -> dict:
             kwargs['norm'] = AsinhNorm(linear_width=lin_width, vmin=vmin, vmax=vmax)
         else:
             raise ValueError(f'Unknown norm: {norm}')
+    else:
+        vmin = kwargs.pop('vmin', None)
+        vmax = kwargs.pop('vmax', None)
     return kwargs
