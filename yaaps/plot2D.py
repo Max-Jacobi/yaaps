@@ -12,6 +12,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.artist import Artist
+from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from tqdm import tqdm
 
 from .decorations import update_color_kwargs
@@ -492,13 +493,8 @@ def save_frames(
     return list(bar(map(work, todo)))
 
 
-
 def make_cax(ax: Axes):
-    cur_ax = plt.gca()
-    pos = ax.get_position()
-    right = pos.x1
-    top = pos.y1
-    bot = pos.y0
-    cax = plt.axes([right + 0.01, bot, 0.02, top - bot])
-    plt.sca(cur_ax)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad="2%")
+    plt.sca(ax)
     return cax
