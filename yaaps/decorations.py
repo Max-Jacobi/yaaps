@@ -13,8 +13,20 @@ def _update_defaults(**default) -> Callable[[dict], dict]:
 _color_kwargs_default: dict[str, Callable[[dict], dict]] = {
     "hydro.prim.rho": _update_defaults(cmap='magma', norm='log'),
     "passive_scalar.r_0": _update_defaults(cmap='coolwarm_r', norm='lin'), # ye
-    "hydro.aux.u_t": _update_defaults(cmap='RdBu', norm='lin', vmin=-1.1, vmax=-.9), # ye
-    "hydro.aux.hu_t": _update_defaults(cmap='managua', norm='lin', vmin=-1.1, vmax=-.9), # ye
+    "hydro.aux.u_t": _update_defaults(cmap='RdBu', norm='lin', vmin=-1.1, vmax=-.9),
+    "hydro.aux.hu_t": _update_defaults(cmap='managua', norm='lin', vmin=-1.1, vmax=-.9),
+    "m1.lab.sc_E_00": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
+    "m1.lab.sc_E_01": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
+    "m1.lab.sc_E_02": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
+    "m1.lab.sc_nG_00": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
+    "m1.lab.sc_nG_01": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
+    "m1.lab.sc_nG_02": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
+    "m1.rad.sc_J_00": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
+    "m1.rad.sc_J_01": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
+    "m1.rad.sc_J_02": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
+    "m1.rad.sc_n_00": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
+    "m1.rad.sc_n_01": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
+    "m1.rad.sc_n_02": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
     "default": _update_defaults(cmap='viridis', norm='lin'),
 }
 
@@ -23,6 +35,18 @@ var_alias: dict[str, str] = {
     "p": "hydro.prim.p",
     "ye": "passive_scalar.r_0",
     "s": "hydro.aux.s",
+    "m1_E_e": "m1.lab.sc_E_00",
+    "m1_E_a": "m1.lab.sc_E_01",
+    "m1_E_x": "m1.lab.sc_E_02",
+    "m1_nG_e": "m1.lab.sc_nG_00",
+    "m1_nG_a": "m1.lab.sc_nG_01",
+    "m1_nG_x": "m1.lab.sc_nG_02",
+    "m1_J_e": "m1.rad.sc_J_00",
+    "m1_J_a": "m1.rad.sc_J_01",
+    "m1_J_x": "m1.rad.sc_J_02",
+    "m1_n_e": "m1.rad.sc_n_00",
+    "m1_n_a": "m1.rad.sc_n_01",
+    "m1_n_x": "m1.rad.sc_n_02",
 }
 
 def update_color_kwargs(var: str, kwargs: dict, data: np.ndarray) -> dict:
