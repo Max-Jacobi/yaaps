@@ -71,21 +71,27 @@ def split(N):
     raise ValueError
 
 def sources(sim):
-    src = [sim.hst,]
+    src = {'hst': sim.hst}
     for s, a in zip(("horizon", "tra", "wav"),
                     (args.horizon_ind, args.tracker_ind, args.wave_rad)):
         try:
-            src.append(getattr(sim, s)(a))
+            src[s[:3]] = getattr(sim, s)(a)
         except FileNotFoundError:
             continue
     return src
 
 def plot(var, ax, sim, func, **kw):
-    for src in sources(sim):
-        if var in src:
-            break
+    if "/" in var:
+        var_type, var = var.split("/", 1)
+        src = sources(sim).get(var_type)
+        if src is None or var not in src:
+            raise KeyError(f"{var} not found in {var_type}")
     else:
-        raise KeyError(f"{var} not found")
+        for src in sources(sim).values():
+            if var in src:
+                break
+        else:
+            raise KeyError(f"{var} not found")
 
     return ax.plot(src[args.xval], func(src[var]), **kw)
 
