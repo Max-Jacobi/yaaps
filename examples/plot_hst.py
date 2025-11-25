@@ -99,17 +99,20 @@ m, n = split(len(vars))
 fig, axs = plt.subplots(m, n, figsize=(n*10, m*4), sharex=True)
 axs = np.atleast_1d(axs)
 
+common_path = os.path.commonpath([sim.path for sim in sims])
+
 for var, ax, func in zip(vars, axs.flat, funcs):
     for sim, c in zip(sims, args.colors):
+        name = sim.path.replace(common_path, '').strip('/')
         if isinstance(var, list):
             for v, ls in zip(var, ('-', '--', ':', '-.')):
-                if sim.name == sims[0].name:
+                if sim.path == sims[0].path:
                     label = v
                 else:
                     label= None
                 plot(v, ax, sim, func, c=c, ls=ls, label=label)
         else:
-            plot(var, ax, sim, func, c=c, label=sim.name)
+            plot(var, ax, sim, func, c=c, label=name)
     ax.set_xlabel(args.xval)
 
     if isinstance(var, list):
