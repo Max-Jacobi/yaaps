@@ -23,7 +23,7 @@ class Simulation:
         path: str,
         input_path: Optional[str] = None
     ):
-        self.path = path
+        self.path = os.path.abspath(path)
         path_split = path.split("/")
         if (("output-" in path_split[-1]) or ("combine" in path_split[-1])) and len(path_split) > 1:
             self.name = path_split[-2]
@@ -136,5 +136,9 @@ def _read_ascii(path: str) -> dict:
             line = f.readline()
     keys = [hh.split(":")[1] for hh in header.split()[1:]]
 
-    data = np.loadtxt(path, skiprows=1, unpack=True)
+    # check if file is empty except header
+    if os.path.getsize(path) == len(header):
+        data = np.array([[]]*len(keys))
+    else:
+        data = np.loadtxt(path, skiprows=1, unpack=True)
     return _straighten(dict(zip(keys, data)))
