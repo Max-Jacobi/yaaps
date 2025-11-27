@@ -41,12 +41,11 @@ class Plot(ABC):
         ...
 
     def animate(self, *args, **kwargs):
-        return animate(*args, fig=self.ax.figure, plots=[self], **kwargs)
+        return animate(*args, fig=self.ax.figure, plots=(self,), **kwargs)
 
 ################################################################################
 
 class Native:
-    ghosts: bool
 
     def __init__(
         self,
@@ -68,7 +67,6 @@ class Native:
 
     @lru_cache(maxsize=1)
     def load_data(self, time: float) -> tuple:
-        tin = time
         it = self.sim.scrape.get_iter_from_time(self.var, self.sampling, time, self.ghosts)
 
         out, _, dg, _ = self.sim.scrape.get_var_info(
