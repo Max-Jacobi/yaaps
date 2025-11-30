@@ -397,9 +397,7 @@ class ScatterPlot(Plot, ABC):
         """
         # Use formatter for title in paper mode, raw format otherwise
         if self.formatter.mode == "paper":
-            from .units import UnitConverter
-            converter = UnitConverter()
-            time_scale, time_unit = converter.get_conversion("time")
+            time_scale, time_unit = self.formatter.unit_converter.get_conversion("time")
             converted_time = time * time_scale
             time_unit_clean = time_unit.strip() if time_unit else ""
             self.ax.set_title(f"$t$ = {converted_time:.2f} {time_unit_clean}")
