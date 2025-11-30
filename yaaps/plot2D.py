@@ -250,10 +250,10 @@ class MeshBlockPlot(Plot):
         self.data = data
 
         self.mb_kwargs = kwargs
-        self.mb_kwargs.setdefault('edgecolor', 'k')
+        self.mb_kwargs.setdefault('edgecolor', 'gray')
         self.mb_kwargs.setdefault('facecolor', 'none')
         self.mb_kwargs.setdefault('linewidth', 0.5)
-        self.mb_kwargs.setdefault('alpha', 0.5)
+        self.mb_kwargs.setdefault('alpha', 0.2)
         self.collection = PatchCollection([], match_original=True)
         self.ax.add_collection(self.collection)
 
@@ -269,8 +269,20 @@ class MeshBlockPlot(Plot):
         """
 
         xyz, *_ = self.data.load_data(time) # should be lru_cached
-        coll = [Rectangle((x1[0], x2[0]), x1[-1]-x1[0], x2[-1]-x2[0], **self.mb_kwargs)
-                for (x1, x2) in zip(*xyz)]
+        if self.data.sampling[0].endswith('v'):
+            coll = [Rectangle(
+                (1.5*x1[0] - 0.5*x1[1], 1.5*x2[0] - 0.5*x2[1]),
+                x1[-1]-2*x1[0] + x1[1],
+                x2[-1]-2*x2[0] + x2[1],
+                **self.mb_kwargs
+                ) for (x1, x2) in zip(*xyz)]
+        else:
+            coll = [Rectangle(
+                (x1[0], x2[0]),
+                x1[-1]-x1[0],
+                x2[-1]-x2[0],
+                **self.mb_kwargs
+                ) for (x1, x2) in zip(*xyz)]
         self.collection = PatchCollection(coll, match_original=True)
         self.ax.add_collection(self.collection)
         return [self.collection]
