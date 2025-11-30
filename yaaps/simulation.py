@@ -91,7 +91,7 @@ class Simulation:
                 in self.scrape.debug_data_keys().keys()
                 if vv == var]
 
-    def complete_var(self, var: str, sampling: tuple[str, ...]) -> tuple[str, int]:
+    def complete_var(self, var: str, sampling: tuple[str, ...]) -> tuple[str, bool]:
         if var in var_alias:
             var = var_alias[var]
         sampling = tuple(x[:2] for x in sampling)

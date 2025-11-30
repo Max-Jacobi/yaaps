@@ -5,7 +5,7 @@ from functools import partial
 from tqdm.auto import tqdm
 
 
-################################################################################
+
 # parallele helpers
 
 def _apply_tail(func: Callable[..., Any], tail: tuple[Any, ...], item: Any):

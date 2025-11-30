@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import Callable, Sequence, TYPE_CHECKING, Mapping
+from collections.abc import Iterable
 import os
-from functools import lru_cache
-from inspect import signature
 
 import numpy as  np
+from scipy.interpolate import griddata
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from matplotlib.collections import PatchCollection, PathCollection
@@ -17,17 +17,56 @@ from tqdm import tqdm
 
 from .decorations import update_color_kwargs
 from .recipes2D import *
+from .datatypes import MeshData, Native, Derived, VectorMeshData, Sampling
 if TYPE_CHECKING:
     from .simulation import Simulation
 
-Sampling = (str | tuple[str, ...])
 
-################################################################################
+
+def interpolate_octree_to_grid(
+    octree_xyz: tuple[np.ndarray, np.ndarray], # array shape = (N_meshblocks, n_points_per_block)
+    octree_data: np.ndarray,                   # array shape = (N_meshblocks, n_x_points_per_block, n_y_points_per_block)
+    grid_xyz: tuple[np.ndarray, np.ndarray],   # array shape = (N_x,) and (N_y,)
+    method: str = 'linear',
+    ) -> np.ndarray:
+    """
+    Interpolate data defined on an octree mesh to a regular grid
+    """
+    # use np.meshgrid for each meshblock to get points in 2D
+
+    octree_x = np.empty_like(octree_data)
+    octree_y = np.empty_like(octree_data)
+
+    for i, (x, y) in enumerate(zip(*octree_xyz)):
+        octree_x[i], octree_y[i] = np.meshgrid(x, y, indexing='ij')
+
+    octree_x = octree_x.ravel()
+    octree_y = octree_y.ravel()
+    values = octree_data.ravel()
+
+    points = np.column_stack((octree_x, octree_y))
+
+    xi = np.column_stack((
+        np.repeat(grid_xyz[0], len(grid_xyz[1])),
+        np.tile(grid_xyz[1], len(grid_xyz[0])),
+    ))
+    grid_data = griddata(
+        points=points,
+        values=values,
+        xi=xi,
+        method=method,
+        fill_value=0.0,
+    )
+    grid_data = grid_data.reshape(len(grid_xyz[0]), len(grid_xyz[1]))
+    return grid_data
+
+
+
 
 class Plot(ABC):
     ax: Axes
 
-    def init_ax(self, ax: (Axes | None)):
+    def __init__(self, ax: (Axes | None)):
         if ax is None:
             self.ax = plt.gca()
         else:
@@ -43,105 +82,12 @@ class Plot(ABC):
     def animate(self, *args, **kwargs):
         return animate(*args, fig=self.ax.figure, plots=(self,), **kwargs)
 
-################################################################################
 
-class Native:
-
-    def __init__(
-        self,
-        sim: "Simulation",
-        var: str,
-        sampling: Sampling = ('x1v', 'x2v'),
-        strip_ghosts: bool = True,
-        ):
-        self.sim = sim
-        if isinstance(sampling, str):
-            _conv = dict(x='x1v', y='x2v', z='x3v')
-            sampling = tuple(_conv[s] for s in sampling)
-        self.sampling = tuple(sampling)
-        self.var, self.ghosts = sim.complete_var(var, self.sampling)
-        self.strip_ghosts = strip_ghosts
-        self.iter_range = np.arange(*sim.scrape.get_iter_range(self.var, self.sampling))
-        out = sim.scrape.get_var_info(self.var, self.sampling)[0]
-        self.time_range = np.array([sim.scrape.get_iter_time(out, it) for it in self.iter_range])
-
-    @lru_cache(maxsize=1)
-    def load_data(self, time: float) -> tuple:
-        it = self.sim.scrape.get_iter_from_time(self.var, self.sampling, time, self.ghosts)
-
-        out, _, dg, _ = self.sim.scrape.get_var_info(
-            self.var, self.sampling, self.ghosts)
-
-        if self.strip_ghosts:
-            strip_dg = dg
-        else:
-            strip_dg = 0
-
-        xyz = self.sim.scrape.get_grid(out=out, sampling=self.sampling, iterate=it, strip_dg=strip_dg)
-        time = self.sim.scrape.get_iter_time(out, it)
-        data = self.sim.scrape.get_var(var=self.var, sampling=self.sampling, iterate=it, strip_dg=dg)
-        return xyz, data, time
-
-    def __repr__(self):
-        return f"<Native({self.var})>"
-
-################################################################################
-
-class Derived:
-    ghosts: bool
-
-    def __init__(
-        self,
-        sim: "Simulation",
-        var: str,
-        depends: tuple[str, ...],
-        definition: Callable,
-        sampling: Sampling = ('x1v', 'x2v'),
-        strip_ghosts: bool = True,
-        ):
-        self.sim = sim
-        if isinstance(sampling, str):
-            _conv = dict(x='x1v', y='x2v', z='x3v')
-            sampling = tuple(_conv[s] for s in sampling)
-        self.sampling = tuple(sampling)
-        self.var = var
-        self.depends = tuple(Native(sim, dep, sampling) for dep in depends)
-        self.definition = definition
-        self.signature = signature(self.definition)
-        self.strip_ghosts = strip_ghosts
-
-        self.iter_range = np.array([it for it in self.depends[0].iter_range
-                                    if all(np.isclose(it, dep.iter_range).any()
-                                           for dep in self.depends[1:])])
-        out = sim.scrape.get_var_info(self.depends[0].var, self.sampling)[0]
-        self.time_range = np.array([sim.scrape.get_iter_time(out, it) for it in self.iter_range])
-
-    @lru_cache(maxsize=1)
-    def load_data(self, time: float) -> tuple:
-
-        native_data = [dep.load_data(time) for dep in self.depends]
-        xyzs = [nd[0] for nd in native_data]
-        datas = [nd[1] for nd in native_data]
-        times = [nd[2] for nd in native_data]
-
-        xyz = xyzs[0]
-        time = times[0]
-        if not all(np.isclose(time, t) for t in times[1:]):
-            raise RuntimeError(f"Not all dependencies for {self.var} have the same time slicing!")
-        kwargs = {name: value for name, value in (('xyz', xyz), ('time', time), ('sampling', self.sampling))
-                  if name in self.signature.parameters}
-        data = self.definition(*datas, **kwargs)
-        return xyz, data, time
-
-    def __repr__(self):
-        return f"<Derived({self.var})>"
-
-################################################################################
 
 class TimeBarPlot(Plot):
 
     def __init__(self, ax: (Axes | None), **kwargs):
-        super().init_ax(ax=ax)
+        super().__init__(ax=ax)
         self.li = self.ax.axvline(0, **kwargs)
 
     def plot(self, time: float) -> list[Artist]:
@@ -152,21 +98,23 @@ class TimeBarPlot(Plot):
         return [self.li]
 
 
-################################################################################
 
-class ColorPlot(Plot, ABC):
+class ColorPlot[DataType: MeshData](Plot, ABC):
     cax: (Axes | None) = None
     cbar: bool = False
+    data: DataType
 
-    def init_plot(
+    def __init__(
         self,
+        data: DataType,
         ax: (Axes | None) = None,
         cbar: (Axes | bool) = True,
         func: Callable | None = None,
-        **kwargs,
-        ) -> list[Artist]:
+        **kwargs):
 
-        super().init_ax(ax=ax)
+        super().__init__(ax=ax)
+
+        self.data = data
 
         if cbar is True:
             self.cbar = True
@@ -175,47 +123,48 @@ class ColorPlot(Plot, ABC):
             self.cbar = True
             self.cax = cbar
 
-        self.ax.set_xlabel(self.sampling[0][:2])
-        self.ax.set_ylabel(self.sampling[1][:2])
+        self.ax.set_xlabel(self.data.sampling[0][:2])
+        self.ax.set_ylabel(self.data.sampling[1][:2])
+        self.ax.set_aspect('equal')
 
         self.func = func
         self.kwargs = kwargs
         self.ims = []
         return self.ims
 
-    def make_plot(
-        self,
-        xyz: tuple[np.ndarray, np.ndarray],
-        data: np.ndarray,
-        time: float,
-        var: str,
-        ) -> list[Artist]:
+    def plot(self, time: float) -> list[Artist]:
+        self.clean()
+        xyz, data, time = self.data.load_data(time)
 
         if self.func is not None:
             data = self.func(data)
 
-        self.kwargs = update_color_kwargs(var, self.kwargs, data=data)
+        self.kwargs = update_color_kwargs(self.data.var, self.kwargs, data=data)
 
-        self.ax.set_title(f"{var} @ t= {time:.2f}")
+        self.ax.set_title(f"{self.data.var} @ t= {time:.2f}")
 
         for fd, xx, yy in zip(data, *xyz):
             coords = np.meshgrid(xx, yy, indexing='ij')
             self.ims.append(self.ax.pcolormesh(*coords, fd, **self.kwargs))
+        artists = self.ims.copy()
 
-        return self.ims
-
+        if self.cbar:
+            plt.colorbar(self.ims[-1], cax=self.cax, )
+        return artists
 
     def clean(self):
         for im in self.ims:
             im.remove()
         self.ims = []
+        if self.cax is not None:
+            self.cax.clear()
 
-################################################################################
+
 
 class ScatterPlot(Plot, ABC):
     cax: (Axes | None) = None
     cbar: bool = False
-    scat = None | PathCollection
+    scat: PathCollection
 
     def init_plot(
         self,
@@ -226,7 +175,7 @@ class ScatterPlot(Plot, ABC):
         **kwargs,
         ) -> list[Artist]:
 
-        super().init_ax(ax=ax)
+        super().__init__(ax=ax)
 
         if cbar is True:
             self.cbar = True
@@ -259,7 +208,7 @@ class ScatterPlot(Plot, ABC):
             self.scat.set_array(c)
         return [self.scat]
 
-################################################################################
+
 
 class MeshBlockPlot(Plot, ABC):
 
@@ -269,7 +218,7 @@ class MeshBlockPlot(Plot, ABC):
         **kwargs,
         ):
 
-        super().init_ax(ax=ax)
+        super().__init__(ax=ax)
 
         self.mb_kwargs = kwargs
         self.mb_kwargs.setdefault('edgecolor', 'k')
@@ -289,48 +238,23 @@ class MeshBlockPlot(Plot, ABC):
     def clean(self):
         self.collection.remove()
 
-################################################################################
 
-class NativeColorPlot(Native, ColorPlot, MeshBlockPlot):
+
+class NativeColorPlot(ColorPlot[Native]):
 
     def __init__(
         self,
         sim: "Simulation",
         var: str,
         sampling: Sampling = ('x1v', 'x2v'),
-        draw_meshblocks: bool = False,
-        meshblock_kwargs: dict = {},
         **kwargs
         ):
-        super().__init__(sim, var, sampling)
+        data = Native(sim, var, sampling)
+        super().__init__(data=data, **kwargs)
 
-        self.draw_meshblocks = draw_meshblocks
-        if self.draw_meshblocks:
-            self.init_meshblocks(**meshblock_kwargs)
 
-        self.init_plot(**kwargs)
-        self.ax.set_aspect('equal')
 
-    def plot(self, time: float) -> list[Artist]:
-        self.clean()
-        xyz, data, time = self.load_data(time)
-
-        artists = self.make_plot(xyz, data, time, self.var)
-
-        if self.cbar:
-            plt.colorbar(self.ims[-1], cax=self.cax, )
-        if self.draw_meshblocks:
-            artists += self.plot_meshblocks(xyz)
-        return artists
-
-    def clean(self):
-        super().clean()
-        if self.cbar:
-            self.cax.clear()
-
-################################################################################
-
-class DerivedColorPlot(Derived, NativeColorPlot):
+class DerivedColorPlot(ColorPlot[Derived]):
 
     def __init__(
         self,
@@ -339,20 +263,12 @@ class DerivedColorPlot(Derived, NativeColorPlot):
         depends: tuple[str, ...],
         definition: Callable,
         sampling: Sampling = ('x1v', 'x2v'),
-        draw_meshblocks: bool = False,
-        meshblock_kwargs: dict = {},
         **kwargs
         ):
-        super().__init__(sim, var, depends, definition, sampling)
+        data = Derived(sim, var, depends, definition, sampling)
+        super().__init__(data=data, **kwargs)
 
-        self.draw_meshblocks = draw_meshblocks
-        if self.draw_meshblocks:
-            self.init_meshblocks(**meshblock_kwargs)
 
-        self.init_plot(**kwargs)
-        self.ax.set_aspect('equal')
-
-################################################################################
 
 class TracerPlot(ScatterPlot):
 
@@ -397,12 +313,12 @@ class TracerPlot(ScatterPlot):
             if tr_t.max() < time or time < tr_t.min():
                 self.x[ii] = np.nan
                 self.y[ii] = np.nan
-                if self.color_key is not None:
+                if self.c is not None:
                     self.c[ii] = np.nan
             else:
                 self.x[ii] = np.interp(time, tr_t, tr_x)
                 self.y[ii] = np.interp(time, tr_t, tr_y)
-                if self.color_key is not None:
+                if self.c is not None:
                     tr_c = tr[self.color_key]
                     self.c[ii] = np.interp(time, tr_t, tr_c)
 
@@ -413,6 +329,128 @@ class TracerPlot(ScatterPlot):
                     self.lines[ii].set_data([x_tr, self.x[ii]], [y_tr, self.y[ii]])
 
         return self.make_plot((self.x, self.y), c=self.c, time=time)
+
+
+
+
+class QuiverPlot(Plot):
+    def __init__(
+        self,
+        data: VectorMeshData,
+        bounds: tuple[float, float, float, float] | float,
+        N_arrows: int | tuple[int, int] = 20,
+        ax: (Axes | None) = None,
+        grid_type: str = "cartesian",
+        **kwargs,
+    ):
+        """Create a quiver plot for a given vector data
+          Arguments:
+
+
+        """
+        super().__init__(ax=ax)
+        self.data = data
+        self.grid_type = grid_type.lower()
+        self.kwargs = kwargs
+        x_grid, y_grid = self._create_grid(bounds, N_arrows)
+        self.grid = np.stack((x_grid.ravel(), y_grid.ravel())).T
+        self.quiv = self.ax.quiver(x_grid, y_grid, np.zeros_like(x_grid), np.zeros_like(y_grid), **self.kwargs)
+
+    def plot(self, time: float) -> list[Artist]:
+        self.ax.set_title(f"{self.data.var} @ t= {time:.2f}")
+        u_grid, v_grid = self.data.interp(self.grid, time=time)
+        self.quiv.set_UVC(u_grid, v_grid)
+        return [self.quiv]
+
+    def _create_grid(self, bounds, N_arrows) -> tuple[np.ndarray, np.ndarray]:
+        if isinstance(N_arrows, int):
+            N_x, N_y = (N_arrows, N_arrows)
+        else:
+            N_x, N_y = N_arrows
+
+        if self.grid_type == "cartesian":
+            if isinstance(bounds, Iterable):
+                x_min, x_max, y_min, y_max = bounds
+                x_grid = np.linspace(x_min, x_max, N_x)
+                y_grid = np.linspace(y_min, y_max, N_y)
+            else:
+                x_grid = np.linspace(-bounds, bounds, N_x)
+                y_grid = np.linspace(-bounds, bounds, N_y)
+            x_grid, y_grid = np.meshgrid(x_grid, y_grid, indexing='ij')
+        elif self.grid_type == "polar":
+            if isinstance(bounds, Iterable):
+                r_min, r_max, ph_min, ph_max = bounds
+                r_grid = np.linspace(r_min, r_max, N_x)
+                ph_grid = np.linspace(ph_min, ph_max, N_y)
+            else:
+                r_grid = np.linspace(-bounds, bounds, N_x)
+                ph_grid = np.linspace(0, 2*np.pi, N_y+1)[:-1]
+            r_grid, ph_grid = np.meshgrid(r_grid, ph_grid, indexing='ij')
+            cph = np.cos(ph_grid)
+            x_grid = cph*r_grid
+            y_grid = np.sqrt(1-cph*cph)*r_grid
+        else:
+            raise ValueError(f'Uknown grid_type: {self.grid_type}. Implemented are "cartesian" and "polar"')
+
+        return x_grid, y_grid
+
+    def clean(self):
+        self.quiv.remove()
+
+
+
+class StreamPlot(Plot):
+    def __init__(
+        self,
+        data: VectorMeshData,
+        bounds: tuple[float, float, float, float] | float,
+        N_points: int | tuple[int, int] = 20,
+        ax: (Axes | None) = None,
+        **kwargs,
+    ):
+        """Create a quiver plot for a given vector data
+          Arguments:
+
+
+        """
+        super().__init__(ax=ax)
+        self.data = data
+        self.kwargs = kwargs
+        self.x_grid, self.y_grid = self._create_grid(bounds, N_points)
+        self.grid = np.stack(np.meshgrid(self.x_grid, self.y_grid, indexing='ij'), axis=-1)
+        u_grid = np.zeros((len(self.x_grid), len(self.y_grid)))
+        v_grid = np.zeros((len(self.x_grid), len(self.y_grid)))
+        self.stream = self.ax.streamplot(self.x_grid, self.y_grid, u_grid, v_grid, **self.kwargs)
+
+    def plot(self, time: float) -> list[Artist]:
+        self.clean()
+        self.ax.set_title(f"{self.data.var} @ t= {time:.2f}")
+        u_grid, v_grid = self.data.interp(self.grid, time=time)
+        self.stream = self.ax.streamplot(self.x_grid, self.y_grid, u_grid, v_grid, **self.kwargs)
+        return [self.stream.lines, self.stream.arrows]
+
+    def _create_grid(self, bounds, N_arrows) -> tuple[np.ndarray, np.ndarray]:
+        if isinstance(N_arrows, int):
+            N_x, N_y = (N_arrows, N_arrows)
+        else:
+            N_x, N_y = N_arrows
+
+        if isinstance(bounds, Iterable):
+            x_min, x_max, y_min, y_max = bounds
+            x_grid = np.linspace(x_min, x_max, N_x)
+            y_grid = np.linspace(y_min, y_max, N_y)
+        else:
+            x_grid = np.linspace(-bounds, bounds, N_x)
+            y_grid = np.linspace(-bounds, bounds, N_y)
+        return x_grid, y_grid
+
+    def clean(self):
+        self.stream.lines.remove()
+        for path in self.stream.arrows._paths:
+            path.remove()
+
+
+
 
 def animate(
     times: Sequence[float],
@@ -431,6 +469,8 @@ def animate(
             total=len(times),
             leave=False,
             )
+    else:
+        bar = None
 
     def _ani(time: float):
         artists = []
@@ -442,7 +482,7 @@ def animate(
                 artists += post_art
             except TypeError:
                 ...
-        if pbar:
+        if bar is not None:
             bar.update()
         return artists
 
