@@ -152,6 +152,13 @@ class Plot(ABC):
         """
         ...
 
+    @abstractmethod
+    def clean(self):
+        """
+        Clean up the plot by removing any created artists.
+        """
+        ...
+
     def animate(self, *args, **kwargs):
         """
         Create an animation by calling plot() at multiple times.
@@ -205,6 +212,9 @@ class TimeBarPlot(Plot):
         self.li.set_xdata([time])
         return [self.li]
 
+    def clean(self):
+        """Remove the vertical line from the axes."""
+        self.li.remove()
 
 
 class ColorPlot[DataType: MeshData](Plot, ABC):
@@ -418,6 +428,10 @@ class ScatterPlot(Plot, ABC):
         if c is not None:
             self.scat.set_array(c)
         return [self.scat]
+
+    def clean(self):
+        """Remove the scatter plot from the axes."""
+        self.scat.remove()
 
 
 
@@ -669,7 +683,11 @@ class TracerPlot(ScatterPlot):
 
         return self.make_plot((converted_x, converted_y), c=self.c, time=time)
 
-
+    def clean(self):
+        """Remove scatter points and trailing lines from the axes."""
+        self.scat.remove()
+        for line in self.lines:
+            line.remove()
 
 
 class QuiverPlot(Plot):
