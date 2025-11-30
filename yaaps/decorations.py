@@ -1,11 +1,27 @@
+"""
+Decorations module for handling color and normalization settings for plots.
+
+This module provides utilities to configure matplotlib colormap and normalization
+settings for various variables commonly used in GRAthena++ simulations.
+"""
+
 from typing import Callable
 import numpy as np
 
 from matplotlib.colors import LogNorm, Normalize, AsinhNorm
 
 
-
 def _update_defaults(**default) -> Callable[[dict], dict]:
+    """
+    Create a function that merges default keyword arguments with provided ones.
+
+    Args:
+        **default: Default keyword arguments to use.
+
+    Returns:
+        A function that takes a dict of kwargs and returns a merged dict
+        with the defaults applied (provided kwargs take precedence).
+    """
     def _inner(kwargs: dict) -> dict:
         return {**default, **kwargs}
     return _inner
@@ -59,6 +75,25 @@ var_alias: dict[str, str] = {
 }
 
 def update_color_kwargs(var: str, kwargs: dict, data: np.ndarray) -> dict:
+    """
+    Update color-related keyword arguments based on the variable and data.
+
+    This function applies default colormap and normalization settings based on
+    the variable name, then computes appropriate vmin/vmax values if not provided.
+
+    Args:
+        var: Variable name used to look up default color settings.
+        kwargs: Dictionary of keyword arguments to update.
+        data: NumPy array of data values used to compute vmin/vmax if not provided.
+
+    Returns:
+        Updated dictionary of keyword arguments with colormap and normalization
+        settings applied. The 'norm' key will contain a matplotlib Normalize,
+        LogNorm, or AsinhNorm instance.
+
+    Raises:
+        ValueError: If an unknown normalization type is specified.
+    """
     if var in _color_kwargs_default:
         kwargs = _color_kwargs_default[var](kwargs)
     else: # default

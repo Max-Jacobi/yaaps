@@ -1,3 +1,12 @@
+"""
+2D plotting module for GRAthena++ simulation data.
+
+This module provides classes and functions for creating 2D visualizations
+of simulation data, including color plots, scatter plots, quiver plots,
+stream plots, mesh block overlays, and animations. It supports both native
+(direct from file) and derived (computed from multiple variables) quantities.
+"""
+
 from abc import ABC, abstractmethod
 from typing import Callable, Sequence, TYPE_CHECKING, Mapping
 from collections.abc import Iterable
@@ -22,15 +31,26 @@ if TYPE_CHECKING:
     from .simulation import Simulation
 
 
-
 def interpolate_octree_to_grid(
-    octree_xyz: tuple[np.ndarray, np.ndarray], # array shape = (N_meshblocks, n_points_per_block)
-    octree_data: np.ndarray,                   # array shape = (N_meshblocks, n_x_points_per_block, n_y_points_per_block)
-    grid_xyz: tuple[np.ndarray, np.ndarray],   # array shape = (N_x,) and (N_y,)
+    octree_xyz: tuple[np.ndarray, np.ndarray],
+    octree_data: np.ndarray,
+    grid_xyz: tuple[np.ndarray, np.ndarray],
     method: str = 'linear',
     ) -> np.ndarray:
     """
-    Interpolate data defined on an octree mesh to a regular grid
+    Interpolate data defined on an octree mesh to a regular grid.
+
+    Args:
+        octree_xyz: Tuple of (x, y) coordinate arrays for each meshblock.
+            Each array has shape (N_meshblocks, n_points_per_block).
+        octree_data: Data values on the octree mesh with shape
+            (N_meshblocks, n_x_points_per_block, n_y_points_per_block).
+        grid_xyz: Tuple of (x_grid, y_grid) 1D arrays defining the
+            regular grid to interpolate to.
+        method: Interpolation method ('linear', 'nearest', 'cubic').
+
+    Returns:
+        2D array of interpolated data with shape (len(x_grid), len(y_grid)).
     """
     # use np.meshgrid for each meshblock to get points in 2D
 
@@ -64,9 +84,25 @@ def interpolate_octree_to_grid(
 
 
 class Plot(ABC):
+    """
+    Abstract base class for all plot types.
+
+    This class defines the interface for plot objects that can be updated
+    at different times and optionally animated.
+
+    Attributes:
+        ax: The matplotlib Axes object for this plot.
+    """
+
     ax: Axes
 
     def __init__(self, ax: (Axes | None)):
+        """
+        Initialize the plot.
+
+        Args:
+            ax: Matplotlib Axes object. If None, uses the current axes.
+        """
         if ax is None:
             self.ax = plt.gca()
         else:
@@ -75,16 +111,45 @@ class Plot(ABC):
     @abstractmethod
     def plot(self, time: float) -> list[Artist]:
         """
-        Plot the data at the given time
+        Plot the data at the given time.
+
+        Args:
+            time: Simulation time to plot.
+
+        Returns:
+            List of matplotlib Artist objects created or updated.
         """
         ...
 
     def animate(self, *args, **kwargs):
+        """
+        Create an animation by calling plot() at multiple times.
+
+        Args:
+            *args: Positional arguments passed to the animate function.
+            **kwargs: Keyword arguments passed to the animate function.
+
+        Returns:
+            A matplotlib FuncAnimation object.
+        """
         return animate(*args, fig=self.ax.figure, plots=(self,), **kwargs)
 
 
 
 class TimeBarPlot(Plot):
+    """
+    A vertical line plot that moves with time.
+
+    Useful for indicating the current time on a separate time-series plot
+    during animations.
+
+    Args:
+        ax: Matplotlib Axes object. If None, uses current axes.
+        **kwargs: Keyword arguments passed to ax.axvline().
+
+    Attributes:
+        li: The matplotlib Line2D object for the vertical line.
+    """
 
     def __init__(self, ax: (Axes | None), **kwargs):
         super().__init__(ax=ax)
@@ -92,7 +157,13 @@ class TimeBarPlot(Plot):
 
     def plot(self, time: float) -> list[Artist]:
         """
-        animate a moving bar
+        Update the vertical line position to the given time.
+
+        Args:
+            time: The x-position for the vertical line.
+
+        Returns:
+            List containing the updated Line2D artist.
         """
         self.li.set_xdata([time])
         return [self.li]
@@ -100,6 +171,24 @@ class TimeBarPlot(Plot):
 
 
 class ColorPlot[DataType: MeshData](Plot, ABC):
+    """
+    Generic 2D color plot class for mesh data (pcolormesh-based).
+
+    This class provides functionality for creating color plots from
+    MeshData objects, including colorbar handling and data transformation.
+
+    Type Parameters:
+        DataType: The type of MeshData (Native, Derived, etc.).
+
+    Attributes:
+        cax: Axes object for the colorbar, if any.
+        cbar: Whether a colorbar is displayed.
+        data: The MeshData object providing the data.
+        func: Optional function to transform data before plotting.
+        kwargs: Keyword arguments for pcolormesh.
+        ims: List of pcolormesh artists created.
+    """
+
     cax: (Axes | None) = None
     cbar: bool = False
     data: DataType
@@ -111,7 +200,17 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
         cbar: (Axes | bool) = True,
         func: Callable | None = None,
         **kwargs):
+        """
+        Initialize the color plot.
 
+        Args:
+            data: MeshData object providing the data to plot.
+            ax: Matplotlib Axes object. If None, uses current axes.
+            cbar: If True, create a colorbar. If an Axes object, use it for
+                the colorbar. If False, no colorbar.
+            func: Optional function to apply to data before plotting.
+            **kwargs: Additional keyword arguments passed to pcolormesh.
+        """
         super().__init__(ax=ax)
 
         self.data = data
@@ -133,6 +232,15 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
         return self.ims
 
     def plot(self, time: float) -> list[Artist]:
+        """
+        Create or update the color plot at the given time.
+
+        Args:
+            time: Simulation time to plot.
+
+        Returns:
+            List of QuadMesh artists created.
+        """
         self.clean()
         xyz, data, time = self.data.load_data(time)
 
@@ -153,6 +261,7 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
         return artists
 
     def clean(self):
+        """Remove all pcolormesh artists from the axes."""
         for im in self.ims:
             im.remove()
         self.ims = []
@@ -162,6 +271,19 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
 
 
 class ScatterPlot(Plot, ABC):
+    """
+    Abstract base class for scatter plots.
+
+    Provides functionality for creating and updating scatter plots with
+    optional color mapping.
+
+    Attributes:
+        cax: Axes object for the colorbar, if any.
+        cbar: Whether a colorbar is displayed.
+        scat: The PathCollection object from ax.scatter().
+        kwargs: Keyword arguments for scatter.
+    """
+
     cax: (Axes | None) = None
     cbar: bool = False
     scat: PathCollection
@@ -174,7 +296,19 @@ class ScatterPlot(Plot, ABC):
         with_c: bool = False,
         **kwargs,
         ) -> list[Artist]:
+        """
+        Initialize the scatter plot.
 
+        Args:
+            n_points: Number of points in the scatter plot.
+            ax: Matplotlib Axes object. If None, uses current axes.
+            cbar: If True, create a colorbar. If an Axes object, use it.
+            with_c: If True, initialize with color values for each point.
+            **kwargs: Additional keyword arguments passed to ax.scatter().
+
+        Returns:
+            List containing the scatter PathCollection artist.
+        """
         super().__init__(ax=ax)
 
         if cbar is True:
@@ -200,7 +334,17 @@ class ScatterPlot(Plot, ABC):
         c: np.ndarray | None,
         time: float,
         ) -> list[Artist]:
-        # todo: set axis labels
+        """
+        Update the scatter plot with new positions and colors.
+
+        Args:
+            xyz: Tuple of (x, y) coordinate arrays.
+            c: Optional array of color values for each point.
+            time: Simulation time for the title.
+
+        Returns:
+            List containing the scatter PathCollection artist.
+        """
         self.ax.set_title(f"t = {time:.0f}")
 
         self.scat.set_offsets(np.column_stack(xyz))
@@ -211,13 +355,30 @@ class ScatterPlot(Plot, ABC):
 
 
 class MeshBlockPlot(Plot, ABC):
+    """
+    Mixin class for adding mesh block boundary overlays to plots.
+
+    Draws rectangles showing the boundaries of individual mesh blocks
+    in adaptive mesh refinement simulations.
+
+    Attributes:
+        mb_kwargs: Keyword arguments for the Rectangle patches.
+        collection: PatchCollection containing all mesh block rectangles.
+    """
 
     def init_meshblocks(
         self,
         ax: (Axes | None) = None,
         **kwargs,
         ):
+        """
+        Initialize mesh block overlay rendering.
 
+        Args:
+            ax: Matplotlib Axes object. If None, uses current axes.
+            **kwargs: Keyword arguments for Rectangle patches. Defaults:
+                edgecolor='k', facecolor='none', linewidth=0.5, alpha=0.5.
+        """
         super().__init__(ax=ax)
 
         self.mb_kwargs = kwargs
@@ -229,6 +390,15 @@ class MeshBlockPlot(Plot, ABC):
         self.ax.add_collection(self.collection)
 
     def plot_meshblocks(self, xyz) -> list[Artist]:
+        """
+        Draw mesh block boundaries.
+
+        Args:
+            xyz: Tuple of coordinate arrays for each meshblock.
+
+        Returns:
+            List containing the PatchCollection artist.
+        """
         coll = [Rectangle((x1[0], x2[0]), x1[-1]-x1[0], x2[-1]-x2[0], **self.mb_kwargs)
                 for (x1, x2) in zip(*xyz)]
         self.collection = PatchCollection(coll, match_original=True)
@@ -236,11 +406,28 @@ class MeshBlockPlot(Plot, ABC):
         return [self.collection]
 
     def clean(self):
+        """Remove the mesh block overlay from the axes."""
         self.collection.remove()
 
 
 
 class NativeColorPlot(ColorPlot[Native]):
+    """
+    2D color plot for native (directly stored) simulation variables.
+
+    Convenience class that creates a Native data loader and passes it
+    to ColorPlot.
+
+    Args:
+        sim: The Simulation object to load data from.
+        var: Variable name to plot.
+        sampling: Coordinate sampling, e.g., ('x1v', 'x2v') or 'xy'.
+        **kwargs: Additional arguments passed to ColorPlot.
+
+    Example:
+        >>> plot = NativeColorPlot(sim, var="rho", sampling="xy")
+        >>> plot.plot(time=100.0)
+    """
 
     def __init__(
         self,
@@ -255,6 +442,27 @@ class NativeColorPlot(ColorPlot[Native]):
 
 
 class DerivedColorPlot(ColorPlot[Derived]):
+    """
+    2D color plot for derived (computed) simulation variables.
+
+    Convenience class that creates a Derived data loader and passes it
+    to ColorPlot.
+
+    Args:
+        sim: The Simulation object to load data from.
+        var: Name for the derived variable.
+        depends: Tuple of variable names that this quantity depends on.
+        definition: Callable that computes the derived quantity.
+        sampling: Coordinate sampling, e.g., ('x1v', 'x2v').
+        **kwargs: Additional arguments passed to ColorPlot.
+
+    Example:
+        >>> def velocity_magnitude(vx, vy, vz):
+        ...     return np.sqrt(vx**2 + vy**2 + vz**2)
+        >>> plot = DerivedColorPlot(sim, var="|v|",
+        ...     depends=("velx", "vely", "velz"),
+        ...     definition=velocity_magnitude)
+    """
 
     def __init__(
         self,
@@ -271,6 +479,28 @@ class DerivedColorPlot(ColorPlot[Derived]):
 
 
 class TracerPlot(ScatterPlot):
+    """
+    Scatter plot for tracer particle positions over time.
+
+    Displays tracer particles as scatter points with optional color
+    mapping and trailing lines showing recent trajectory.
+
+    Args:
+        tracers: List of tracer data dictionaries, each containing at
+            minimum 'time' and coordinate keys.
+        coord_keys: Tuple of (x_key, y_key) specifying which tracer
+            data keys to use for coordinates. Default: ('x1', 'x2').
+        color_key: Optional key for color-mapping the points.
+        trail_len: If > 0, draw trailing lines of this time duration.
+        line_kwargs: Keyword arguments for the trailing lines.
+        **kwargs: Additional arguments passed to ScatterPlot.init_plot().
+
+    Attributes:
+        tracers: List of tracer data dictionaries.
+        x, y: Current position arrays.
+        c: Current color values (if color_key specified).
+        lines: List of Line2D objects for trailing lines.
+    """
 
     def __init__(
         self,
@@ -305,6 +535,18 @@ class TracerPlot(ScatterPlot):
         self.ax.set_aspect('equal')
 
     def plot(self, time: float) -> list[Artist]:
+        """
+        Update tracer positions and trails at the given time.
+
+        Interpolates tracer positions to the specified time and updates
+        the scatter plot and trailing lines.
+
+        Args:
+            time: Simulation time to display.
+
+        Returns:
+            List of scatter and line artists.
+        """
         for ii, tr in enumerate(self.tracers):
             tr_t = tr['time']
             tr_x = tr[self.coord_keys[0]]
@@ -334,6 +576,29 @@ class TracerPlot(ScatterPlot):
 
 
 class QuiverPlot(Plot):
+    """
+    Quiver (arrow) plot for vector field data.
+
+    Displays vector data as arrows on a regular grid, supporting both
+    Cartesian and polar grid layouts.
+
+    Args:
+        data: VectorMeshData object providing the vector field.
+        bounds: Domain bounds. Either a single float for symmetric bounds
+            (-bounds, bounds, -bounds, bounds) or a tuple (x_min, x_max, y_min, y_max)
+            for Cartesian, or (r_min, r_max, phi_min, phi_max) for polar.
+        N_arrows: Number of arrows per dimension. Either an int for square
+            grid or tuple (N_x, N_y).
+        ax: Matplotlib Axes object. If None, uses current axes.
+        grid_type: Type of arrow placement grid, 'cartesian' or 'polar'.
+        **kwargs: Additional keyword arguments passed to ax.quiver().
+
+    Attributes:
+        data: The VectorMeshData providing vector values.
+        grid: Array of grid points for interpolation.
+        quiv: The Quiver artist.
+    """
+
     def __init__(
         self,
         data: VectorMeshData,
@@ -343,11 +608,6 @@ class QuiverPlot(Plot):
         grid_type: str = "cartesian",
         **kwargs,
     ):
-        """Create a quiver plot for a given vector data
-          Arguments:
-
-
-        """
         super().__init__(ax=ax)
         self.data = data
         self.grid_type = grid_type.lower()
@@ -357,12 +617,34 @@ class QuiverPlot(Plot):
         self.quiv = self.ax.quiver(x_grid, y_grid, np.zeros_like(x_grid), np.zeros_like(y_grid), **self.kwargs)
 
     def plot(self, time: float) -> list[Artist]:
+        """
+        Update the quiver plot at the given time.
+
+        Args:
+            time: Simulation time to display.
+
+        Returns:
+            List containing the Quiver artist.
+        """
         self.ax.set_title(f"{self.data.var} @ t= {time:.2f}")
         u_grid, v_grid = self.data.interp(self.grid, time=time)
         self.quiv.set_UVC(u_grid, v_grid)
         return [self.quiv]
 
     def _create_grid(self, bounds, N_arrows) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Create the grid of arrow positions.
+
+        Args:
+            bounds: Domain bounds specification.
+            N_arrows: Number of arrows per dimension.
+
+        Returns:
+            Tuple of (x_grid, y_grid) 2D arrays.
+
+        Raises:
+            ValueError: If grid_type is not recognized.
+        """
         if isinstance(N_arrows, int):
             N_x, N_y = (N_arrows, N_arrows)
         else:
@@ -395,11 +677,31 @@ class QuiverPlot(Plot):
         return x_grid, y_grid
 
     def clean(self):
+        """Remove the quiver plot from the axes."""
         self.quiv.remove()
 
 
-
 class StreamPlot(Plot):
+    """
+    Streamline plot for vector field data.
+
+    Displays vector data as streamlines on a regular grid.
+
+    Args:
+        data: VectorMeshData object providing the vector field.
+        bounds: Domain bounds. Either a single float for symmetric bounds
+            (-bounds, bounds, -bounds, bounds) or a tuple (x_min, x_max, y_min, y_max).
+        N_points: Number of grid points per dimension for interpolation.
+            Either an int for square grid or tuple (N_x, N_y).
+        ax: Matplotlib Axes object. If None, uses current axes.
+        **kwargs: Additional keyword arguments passed to ax.streamplot().
+
+    Attributes:
+        data: The VectorMeshData providing vector values.
+        x_grid, y_grid: 1D arrays defining the interpolation grid.
+        stream: The StreamplotSet containing lines and arrows.
+    """
+
     def __init__(
         self,
         data: VectorMeshData,
@@ -408,11 +710,6 @@ class StreamPlot(Plot):
         ax: (Axes | None) = None,
         **kwargs,
     ):
-        """Create a quiver plot for a given vector data
-          Arguments:
-
-
-        """
         super().__init__(ax=ax)
         self.data = data
         self.kwargs = kwargs
@@ -423,6 +720,15 @@ class StreamPlot(Plot):
         self.stream = self.ax.streamplot(self.x_grid, self.y_grid, u_grid, v_grid, **self.kwargs)
 
     def plot(self, time: float) -> list[Artist]:
+        """
+        Update the streamline plot at the given time.
+
+        Args:
+            time: Simulation time to display.
+
+        Returns:
+            List containing the streamline and arrow artists.
+        """
         self.clean()
         self.ax.set_title(f"{self.data.var} @ t= {time:.2f}")
         u_grid, v_grid = self.data.interp(self.grid, time=time)
@@ -430,6 +736,16 @@ class StreamPlot(Plot):
         return [self.stream.lines, self.stream.arrows]
 
     def _create_grid(self, bounds, N_arrows) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Create the grid for streamline computation.
+
+        Args:
+            bounds: Domain bounds specification.
+            N_arrows: Number of grid points per dimension.
+
+        Returns:
+            Tuple of (x_grid, y_grid) 1D arrays.
+        """
         if isinstance(N_arrows, int):
             N_x, N_y = (N_arrows, N_arrows)
         else:
@@ -445,11 +761,10 @@ class StreamPlot(Plot):
         return x_grid, y_grid
 
     def clean(self):
+        """Remove the streamline plot from the axes."""
         self.stream.lines.remove()
         for path in self.stream.arrows._paths:
             path.remove()
-
-
 
 
 def animate(
@@ -460,7 +775,25 @@ def animate(
     pbar: bool = True,
     **kwargs,
 ):
+    """
+    Create an animation from a sequence of plots over time.
 
+    Args:
+        times: Sequence of simulation times to include in the animation.
+        fig: Matplotlib Figure containing the plots.
+        plots: Tuple of Plot objects to update at each time.
+        post_draw: Optional callable that is invoked after all plots are
+            drawn. Should accept time and return a sequence of Artists.
+        pbar: If True, display a progress bar during animation creation.
+        **kwargs: Additional keyword arguments passed to FuncAnimation.
+
+    Returns:
+        A matplotlib FuncAnimation object.
+
+    Example:
+        >>> anim = animate(times=[0, 10, 20], fig=fig, plots=(plot1, plot2))
+        >>> anim.save("animation.mp4")
+    """
     if pbar:
         bar = tqdm(
             ncols=0 ,
@@ -488,6 +821,7 @@ def animate(
 
     return FuncAnimation(fig, _ani, frames=times, **kwargs)
 
+
 def save_frames(
     times: Sequence[float],
     fig: Figure,
@@ -499,7 +833,32 @@ def save_frames(
     pbar: bool = True,
     **savefig_kwargs,
 ):
+    """
+    Save animation frames as individual image files.
 
+    This is an alternative to creating a video animation, useful when
+    more control over individual frames is needed or when video encoding
+    is not available.
+
+    Args:
+        times: Sequence of simulation times to save.
+        fig: Matplotlib Figure containing the plots.
+        plots: Tuple of Plot objects to update at each time.
+        post_draw: Optional callable invoked after plotting each frame.
+        output_dir: Directory to save frames in. Created if it doesn't exist.
+        prefix: Filename prefix for frames (e.g., "frame" -> "frame0001.png").
+        dpi: Resolution for saved images. If None, uses matplotlib default.
+        pbar: If True, display a progress bar.
+        **savefig_kwargs: Additional keyword arguments passed to fig.savefig().
+
+    Returns:
+        List of paths to the saved frame files.
+
+    Example:
+        >>> frames = save_frames(times, fig, plots, output_dir="my_frames")
+        >>> print(frames[0])
+        'my_frames/frame0000.png'
+    """
     os.makedirs(output_dir, exist_ok=True)
     total = len(times)
     todo = enumerate(times)
@@ -532,6 +891,16 @@ def save_frames(
 
 
 def make_cax(ax: Axes):
+    """
+    Create a colorbar axes adjacent to an existing axes.
+
+    Args:
+        ax: The main axes to attach the colorbar to.
+
+    Returns:
+        A new Axes object positioned to the right of the main axes,
+        suitable for use as a colorbar axes.
+    """
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad="2%")
     plt.sca(ax)
