@@ -27,6 +27,7 @@ from tqdm import tqdm
 from .decorations import update_color_kwargs
 from .recipes2D import *
 from .datatypes import MeshData, Native, Derived, VectorMeshData, Sampling
+from .plot_formatter import PlotFormatter, PlotMode
 if TYPE_CHECKING:
     from .simulation import Simulation
 
@@ -92,21 +93,51 @@ class Plot(ABC):
 
     Attributes:
         ax: The matplotlib Axes object for this plot.
+        formatter: The PlotFormatter instance or str for label and unit handling.
     """
 
     ax: Axes
+    formatter: PlotFormatter
 
-    def __init__(self, ax: (Axes | None)):
+    def __init__(self, ax: (Axes | None), formatter: PlotFormatter | str | None = None):
         """
         Initialize the plot.
 
         Args:
             ax: Matplotlib Axes object. If None, uses the current axes.
+            formatter: PlotFormatter instance or str for label formatting or str
+                specifying mode ("raw" or "paper"). If None, uses default
+                PlotFormatter in "raw" mode.
+
+        Raises:
+            TypeError: If formatter is not a PlotFormatter, str, or None.
         """
         if ax is None:
             self.ax = plt.gca()
         else:
             self.ax = ax
+        self.formatter = formatter
+        if isinstance(formatter, str):
+            self.formatter = PlotFormatter(mode=formatter)
+        elif isinstance(formatter, PlotFormatter):
+            self.formatter = formatter
+        elif formatter is None:
+            self.formatter = PlotFormatter(mode="raw")
+        else:
+            raise TypeError("formatter must be a PlotFormatter, str, or None")
+
+    def set_plot_mode(self, mode: PlotMode) -> None:
+        """
+        Change the plot formatting mode.
+
+        Args:
+            mode: The new formatting mode, either "raw" or "paper".
+
+        Example:
+            >>> plot.set_plot_mode("paper")  # Switch to publication mode
+            >>> plot.set_plot_mode("raw")    # Switch back to raw mode
+        """
+        self.formatter.set_mode(mode)
 
     @abstractmethod
     def plot(self, time: float) -> list[Artist]:
@@ -118,6 +149,13 @@ class Plot(ABC):
 
         Returns:
             List of matplotlib Artist objects created or updated.
+        """
+        ...
+
+    @abstractmethod
+    def clean(self):
+        """
+        Clean up the plot by removing any created artists.
         """
         ...
 
@@ -145,14 +183,20 @@ class TimeBarPlot(Plot):
 
     Args:
         ax: Matplotlib Axes object. If None, uses current axes.
+        formatter: PlotFormatter instance or str for label formatting.
         **kwargs: Keyword arguments passed to ax.axvline().
 
     Attributes:
         li: The matplotlib Line2D object for the vertical line.
     """
 
-    def __init__(self, ax: (Axes | None), **kwargs):
-        super().__init__(ax=ax)
+    def __init__(
+        self,
+        ax: (Axes | None),
+        formatter: PlotFormatter | str | None = None,
+        **kwargs
+    ):
+        super().__init__(ax=ax, formatter=formatter)
         self.li = self.ax.axvline(0, **kwargs)
 
     def plot(self, time: float) -> list[Artist]:
@@ -168,6 +212,9 @@ class TimeBarPlot(Plot):
         self.li.set_xdata([time])
         return [self.li]
 
+    def clean(self):
+        """Remove the vertical line from the axes."""
+        self.li.remove()
 
 
 class ColorPlot[DataType: MeshData](Plot, ABC):
@@ -184,6 +231,7 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
         cax: Axes object for the colorbar, if any.
         cbar: Whether a colorbar is displayed.
         data: The MeshData object providing the data.
+        formatter: PlotFormatter instance or str for label and unit handling.
         func: Optional function to transform data before plotting.
         kwargs: Keyword arguments for pcolormesh.
         ims: List of pcolormesh artists created.
@@ -199,6 +247,7 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
         ax: (Axes | None) = None,
         cbar: (Axes | bool) = True,
         func: Callable | None = None,
+        formatter: PlotFormatter | str | None = None,
         **kwargs):
         """
         Initialize the color plot.
@@ -209,9 +258,11 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
             cbar: If True, create a colorbar. If an Axes object, use it for
                 the colorbar. If False, no colorbar.
             func: Optional function to apply to data before plotting.
+            formatter: PlotFormatter instance or str for label formatting. If None,
+                uses a default PlotFormatter in "raw" mode.
             **kwargs: Additional keyword arguments passed to pcolormesh.
         """
-        super().__init__(ax=ax)
+        super().__init__(ax=ax, formatter=formatter)
 
         self.data = data
 
@@ -222,8 +273,11 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
             self.cbar = True
             self.cax = cbar
 
-        self.ax.set_xlabel(self.data.sampling[0][:2])
-        self.ax.set_ylabel(self.data.sampling[1][:2])
+        # Set axis labels using formatter
+        x_label = self.formatter.format_axis_label(self.data.sampling[0])
+        y_label = self.formatter.format_axis_label(self.data.sampling[1])
+        self.ax.set_xlabel(x_label)
+        self.ax.set_ylabel(y_label)
         self.ax.set_aspect('equal')
 
         self.func = func
@@ -242,22 +296,34 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
             List of QuadMesh artists created.
         """
         self.clean()
-        xyz, data, time = self.data.load_data(time)
+        xyz, data, actual_time = self.data.load_data(time)
 
+        # Apply data transformation if specified
         if self.func is not None:
             data = self.func(data)
 
+        # Convert data and coordinates based on formatter mode
+        data = self.formatter.convert_data(self.data.var, data)
+        converted_xyz = (
+            tuple(self.formatter.convert_coordinate(self.data.sampling[0], x) for x in xyz[0]),
+            tuple(self.formatter.convert_coordinate(self.data.sampling[1], y) for y in xyz[1]),
+        )
+
         self.kwargs = update_color_kwargs(self.data.var, self.kwargs, data=data)
 
-        self.ax.set_title(f"{self.data.var} @ t= {time:.2f}")
+        # Set title using formatter
+        self.ax.set_title(self.formatter.format_title(self.data.var, actual_time))
 
-        for fd, xx, yy in zip(data, *xyz):
+        for fd, xx, yy in zip(data, *converted_xyz):
             coords = np.meshgrid(xx, yy, indexing='ij')
             self.ims.append(self.ax.pcolormesh(*coords, fd, **self.kwargs))
         artists = self.ims.copy()
 
         if self.cbar:
-            plt.colorbar(self.ims[-1], cax=self.cax, )
+            cbar_label = self.formatter.format_colorbar_label(self.data.var)
+            cb = plt.colorbar(self.ims[-1], cax=self.cax)
+            if self.formatter.mode == "paper":
+                cb.set_label(cbar_label)
         return artists
 
     def clean(self):
@@ -280,6 +346,7 @@ class ScatterPlot(Plot, ABC):
     Attributes:
         cax: Axes object for the colorbar, if any.
         cbar: Whether a colorbar is displayed.
+        formatter: PlotFormatter instance or str for label and unit handling.
         scat: The PathCollection object from ax.scatter().
         kwargs: Keyword arguments for scatter.
     """
@@ -294,6 +361,7 @@ class ScatterPlot(Plot, ABC):
         ax: (Axes | None) = None,
         cbar: (Axes | bool) = False,
         with_c: bool = False,
+        formatter: PlotFormatter | str | None = None,
         **kwargs,
         ) -> list[Artist]:
         """
@@ -304,12 +372,14 @@ class ScatterPlot(Plot, ABC):
             ax: Matplotlib Axes object. If None, uses current axes.
             cbar: If True, create a colorbar. If an Axes object, use it.
             with_c: If True, initialize with color values for each point.
+            formatter: PlotFormatter instance or str for label formatting. If None,
+                uses a default PlotFormatter in "raw" mode.
             **kwargs: Additional keyword arguments passed to ax.scatter().
 
         Returns:
             List containing the scatter PathCollection artist.
         """
-        super().__init__(ax=ax)
+        super().__init__(ax=ax, formatter=formatter)
 
         if cbar is True:
             self.cbar = True
@@ -345,12 +415,23 @@ class ScatterPlot(Plot, ABC):
         Returns:
             List containing the scatter PathCollection artist.
         """
-        self.ax.set_title(f"t = {time:.0f}")
+        # Use formatter for title in paper mode, raw format otherwise
+        if self.formatter.mode == "paper":
+            time_scale, time_unit = self.formatter.unit_converter.get_conversion("time")
+            converted_time = time * time_scale
+            time_unit_clean = time_unit.strip() if time_unit else ""
+            self.ax.set_title(f"$t$ = {converted_time:.2f} {time_unit_clean}")
+        else:
+            self.ax.set_title(f"t = {time:.0f}")
 
         self.scat.set_offsets(np.column_stack(xyz))
         if c is not None:
             self.scat.set_array(c)
         return [self.scat]
+
+    def clean(self):
+        """Remove the scatter plot from the axes."""
+        self.scat.remove()
 
 
 
@@ -369,6 +450,7 @@ class MeshBlockPlot(Plot, ABC):
     def init_meshblocks(
         self,
         ax: (Axes | None) = None,
+        formatter: PlotFormatter | str | None = None,
         **kwargs,
         ):
         """
@@ -376,10 +458,12 @@ class MeshBlockPlot(Plot, ABC):
 
         Args:
             ax: Matplotlib Axes object. If None, uses current axes.
+            formatter: PlotFormatter instance or str for label formatting. If None,
+                uses a default PlotFormatter in "raw" mode.
             **kwargs: Keyword arguments for Rectangle patches. Defaults:
                 edgecolor='k', facecolor='none', linewidth=0.5, alpha=0.5.
         """
-        super().__init__(ax=ax)
+        super().__init__(ax=ax, formatter=formatter)
 
         self.mb_kwargs = kwargs
         self.mb_kwargs.setdefault('edgecolor', 'k')
@@ -422,11 +506,17 @@ class NativeColorPlot(ColorPlot[Native]):
         sim: The Simulation object to load data from.
         var: Variable name to plot.
         sampling: Coordinate sampling, e.g., ('x1v', 'x2v') or 'xy'.
+        formatter: PlotFormatter instance or str for label formatting. If None,
+            uses a default PlotFormatter in "raw" mode.
         **kwargs: Additional arguments passed to ColorPlot.
 
     Example:
         >>> plot = NativeColorPlot(sim, var="rho", sampling="xy")
         >>> plot.plot(time=100.0)
+        >>> # With paper-ready formatting:
+        >>> from yaaps.plot_formatter import PlotFormatter
+        >>> formatter = PlotFormatter(mode="paper")
+        >>> plot = NativeColorPlot(sim, var="rho", formatter=formatter)
     """
 
     def __init__(
@@ -434,10 +524,11 @@ class NativeColorPlot(ColorPlot[Native]):
         sim: "Simulation",
         var: str,
         sampling: Sampling = ('x1v', 'x2v'),
+        formatter: PlotFormatter | str | None = None,
         **kwargs
         ):
         data = Native(sim, var, sampling)
-        super().__init__(data=data, **kwargs)
+        super().__init__(data=data, formatter=formatter, **kwargs)
 
 
 
@@ -454,6 +545,8 @@ class DerivedColorPlot(ColorPlot[Derived]):
         depends: Tuple of variable names that this quantity depends on.
         definition: Callable that computes the derived quantity.
         sampling: Coordinate sampling, e.g., ('x1v', 'x2v').
+        formatter: PlotFormatter instance or str for label formatting. If None,
+            uses a default PlotFormatter in "raw" mode.
         **kwargs: Additional arguments passed to ColorPlot.
 
     Example:
@@ -471,10 +564,11 @@ class DerivedColorPlot(ColorPlot[Derived]):
         depends: tuple[str, ...],
         definition: Callable,
         sampling: Sampling = ('x1v', 'x2v'),
+        formatter: PlotFormatter | str | None = None,
         **kwargs
         ):
         data = Derived(sim, var, depends, definition, sampling)
-        super().__init__(data=data, **kwargs)
+        super().__init__(data=data, formatter=formatter, **kwargs)
 
 
 
@@ -493,6 +587,8 @@ class TracerPlot(ScatterPlot):
         color_key: Optional key for color-mapping the points.
         trail_len: If > 0, draw trailing lines of this time duration.
         line_kwargs: Keyword arguments for the trailing lines.
+        formatter: PlotFormatter instance or str for label formatting. If None,
+            uses a default PlotFormatter in "raw" mode.
         **kwargs: Additional arguments passed to ScatterPlot.init_plot().
 
     Attributes:
@@ -509,11 +605,13 @@ class TracerPlot(ScatterPlot):
         color_key: str | None = None,
         trail_len: float = 0,
         line_kwargs: dict = {},
+        formatter: PlotFormatter | str | None = None,
         **kwargs
     ):
         self.tracers = tracers
         n_tracers = len(tracers)
-        self.init_plot(n_tracers, with_c=color_key is not None, **kwargs)
+        self._formatter = formatter
+        self.init_plot(n_tracers, with_c=color_key is not None, formatter=formatter, **kwargs)
         self.coord_keys = coord_keys
         self.color_key = color_key
         self.trail_len = trail_len
@@ -533,6 +631,13 @@ class TracerPlot(ScatterPlot):
         self.lines = [self.ax.plot([], [], **self.line_kwargs)[0]
                       for _ in self.tracers]
         self.ax.set_aspect('equal')
+
+        # Set axis labels using formatter if in paper mode
+        if self.formatter.mode == "paper":
+            x_coord = "x1v" if self.coord_keys[0] == "x1" else self.coord_keys[0]
+            y_coord = "x2v" if self.coord_keys[1] == "x2" else self.coord_keys[1]
+            self.ax.set_xlabel(self.formatter.format_axis_label(x_coord))
+            self.ax.set_ylabel(self.formatter.format_axis_label(y_coord))
 
     def plot(self, time: float) -> list[Artist]:
         """
@@ -570,9 +675,19 @@ class TracerPlot(ScatterPlot):
                     y_tr = np.interp(time-self.trail_len, tr_t, tr_y)
                     self.lines[ii].set_data([x_tr, self.x[ii]], [y_tr, self.y[ii]])
 
-        return self.make_plot((self.x, self.y), c=self.c, time=time)
+        # Convert coordinates if in paper mode
+        x_coord = "x1v" if self.coord_keys[0] == "x1" else self.coord_keys[0]
+        y_coord = "x2v" if self.coord_keys[1] == "x2" else self.coord_keys[1]
+        converted_x = self.formatter.convert_coordinate(x_coord, self.x)
+        converted_y = self.formatter.convert_coordinate(y_coord, self.y)
 
+        return self.make_plot((converted_x, converted_y), c=self.c, time=time)
 
+    def clean(self):
+        """Remove scatter points and trailing lines from the axes."""
+        self.scat.remove()
+        for line in self.lines:
+            line.remove()
 
 
 class QuiverPlot(Plot):
@@ -591,6 +706,8 @@ class QuiverPlot(Plot):
             grid or tuple (N_x, N_y).
         ax: Matplotlib Axes object. If None, uses current axes.
         grid_type: Type of arrow placement grid, 'cartesian' or 'polar'.
+        formatter: PlotFormatter instance or str for label formatting. If None,
+            uses a default PlotFormatter in "raw" mode.
         **kwargs: Additional keyword arguments passed to ax.quiver().
 
     Attributes:
@@ -606,15 +723,19 @@ class QuiverPlot(Plot):
         N_arrows: int | tuple[int, int] = 20,
         ax: (Axes | None) = None,
         grid_type: str = "cartesian",
+        formatter: PlotFormatter | str | None = None,
         **kwargs,
     ):
-        super().__init__(ax=ax)
+        super().__init__(ax=ax, formatter=formatter)
         self.data = data
         self.grid_type = grid_type.lower()
         self.kwargs = kwargs
         x_grid, y_grid = self._create_grid(bounds, N_arrows)
         self.grid = np.stack((x_grid.ravel(), y_grid.ravel())).T
-        self.quiv = self.ax.quiver(x_grid, y_grid, np.zeros_like(x_grid), np.zeros_like(y_grid), **self.kwargs)
+        converted_x_grid = self.formatter.convert_coordinate(data.sampling[0], x_grid)
+        converted_y_grid = self.formatter.convert_coordinate(data.sampling[1], y_grid)
+        self.quiv = self.ax.quiver(converted_x_grid, converted_y_grid,
+                                   np.zeros_like(x_grid), np.zeros_like(y_grid), **self.kwargs)
 
     def plot(self, time: float) -> list[Artist]:
         """
@@ -626,7 +747,8 @@ class QuiverPlot(Plot):
         Returns:
             List containing the Quiver artist.
         """
-        self.ax.set_title(f"{self.data.var} @ t= {time:.2f}")
+        # Set title using formatter
+        self.ax.set_title(self.formatter.format_title(self.data.var, time))
         u_grid, v_grid = self.data.interp(self.grid, time=time)
         self.quiv.set_UVC(u_grid, v_grid)
         return [self.quiv]
@@ -694,6 +816,8 @@ class StreamPlot(Plot):
         N_points: Number of grid points per dimension for interpolation.
             Either an int for square grid or tuple (N_x, N_y).
         ax: Matplotlib Axes object. If None, uses current axes.
+        formatter: PlotFormatter instance or str for label formatting. If None,
+            uses a default PlotFormatter in "raw" mode.
         **kwargs: Additional keyword arguments passed to ax.streamplot().
 
     Attributes:
@@ -708,16 +832,20 @@ class StreamPlot(Plot):
         bounds: tuple[float, float, float, float] | float,
         N_points: int | tuple[int, int] = 20,
         ax: (Axes | None) = None,
+        formatter: PlotFormatter | str | None = None,
         **kwargs,
     ):
-        super().__init__(ax=ax)
+        super().__init__(ax=ax, formatter=formatter)
         self.data = data
         self.kwargs = kwargs
         self.x_grid, self.y_grid = self._create_grid(bounds, N_points)
+        self.converted_x_grid = self.formatter.convert_coordinate(data.sampling[0], self.x_grid)
+        self.converted_y_grid = self.formatter.convert_coordinate(data.sampling[1], self.y_grid)
         self.grid = np.stack(np.meshgrid(self.x_grid, self.y_grid, indexing='ij'), axis=-1)
         u_grid = np.zeros((len(self.x_grid), len(self.y_grid)))
         v_grid = np.zeros((len(self.x_grid), len(self.y_grid)))
-        self.stream = self.ax.streamplot(self.x_grid, self.y_grid, u_grid, v_grid, **self.kwargs)
+        self.stream = self.ax.streamplot(self.converted_x_grid, self.converted_y_grid,
+                                         u_grid, v_grid, **self.kwargs)
 
     def plot(self, time: float) -> list[Artist]:
         """
@@ -730,9 +858,11 @@ class StreamPlot(Plot):
             List containing the streamline and arrow artists.
         """
         self.clean()
-        self.ax.set_title(f"{self.data.var} @ t= {time:.2f}")
+        # Set title using formatter
+        self.ax.set_title(self.formatter.format_title(self.data.var, time))
         u_grid, v_grid = self.data.interp(self.grid, time=time)
-        self.stream = self.ax.streamplot(self.x_grid, self.y_grid, u_grid, v_grid, **self.kwargs)
+        self.stream = self.ax.streamplot(self.converted_x_grid, self.converted_y_grid,
+                                         u_grid, v_grid, **self.kwargs)
         return [self.stream.lines, self.stream.arrows]
 
     def _create_grid(self, bounds, N_arrows) -> tuple[np.ndarray, np.ndarray]:

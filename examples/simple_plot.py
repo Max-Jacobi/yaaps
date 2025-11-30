@@ -1,36 +1,34 @@
-import argparse
+import os
 import sys
-import numpy as np
+import tempfile
+import argparse
 import matplotlib.pyplot as plt
-
 import yaaps as ya
-import yaaps.plot2D as yp
 
-ap = argparse.ArgumentParser("Make an animation and save the frames as png")
+# for -f argument
+import numpy as np
+
+ap = argparse.ArgumentParser("Create a 2D grid plot using yaaps and save it as png")
 
 ap.add_argument('var', type=str, help="Variable to plot")
 ap.add_argument('-o','--outputpath', type=str, default=None,
                 help="Path to save at")
+ap.add_argument('-t','--time', type=float, default=1e5,
+                help="Time to plot at")
 ap.add_argument('-s','--simdir', type=str, default='active',
                 help="Directory to look for athdf files in")
 ap.add_argument('-r','--sampling', type=str, default='xy',
                 help="Plane to plot")
-ap.add_argument('-b', '--boundary', type=float, default=None,
-                help="Boundary of the plot")
-ap.add_argument('--time_min', type=float, default=None,
-                help="Time to start at")
-ap.add_argument('--time_max', type=float, default=None,
-                help="Time to end at")
-ap.add_argument('--time_every', type=int, default=1,
-                help="Create frames at every nth output time")
-ap.add_argument('-m','--meshblocks', action="store_true",
-                help="Draw mesh-block boundaries")
-ap.add_argument('-f','--func', default="None", type=str,
-                help="Modify plot with given function. (calls eval)")
 ap.add_argument('-c','--cmap', type=str, default=None,
                 help="Colormap")
 ap.add_argument('-n','--norm', type=str, default=None,
                 help="-n 'log' for logsscale")
+ap.add_argument('-b', '--boundary', type=float, default=None,
+                help="Boundary of the plot")
+ap.add_argument('-m','--meshblocks', action="store_true",
+                help="Draw mesh-block boundaries")
+ap.add_argument('-f','--func', default="None", type=str,
+                help="Modify plot with given function. (calls eval)")
 ap.add_argument('--vmin', type=float, default=None,
                 help="Minimum of the colorscale")
 ap.add_argument('--vmax', type=float, default=None,
@@ -49,15 +47,22 @@ if len(sys.argv) == 1:
 args = ap.parse_args()
 
 sim = ya.Simulation(args.simdir)
+
+if args.outputpath is None:
+    fd, args.outputpath = tempfile.mkstemp(suffix=".png")
+    os.close(fd)
+
 func = eval(args.func)
 
-fig, ax = plt.subplots(1, figsize=(6, 4), animated=True)
+if args.paper_format:
+    formatter = ya.plot_formatter.PlotFormatter("paper")
+    args.time = formatter.inverse_convert_time(args.time)
 
-ax.set_xlim(-args.boundary, args.boundary)
-ax.set_ylim(-args.boundary, args.boundary)
 
+fig, ax = plt.subplots(1, figsize=(4,3.5))
 kwargs = dict(
     var=args.var,
+    time=args.time,
     norm=args.norm,
     func=func,
     sampling=args.sampling,
@@ -66,33 +71,17 @@ kwargs = dict(
     vmax=args.vmax,
     ax=ax,
     formatter="paper" if args.paper_format else "raw",
-    )
+)
 
 for k, v in list(kwargs.items()):
     if v is None:
         kwargs.pop(k)
 
-plot = yp.NativeColorPlot(sim=sim, **kwargs)
-if args.time_min is not None:
-    args.time_min = plot.formatter.inverse_convert_time(args.time_min)
+sim.plot2d(**kwargs)
 
-if args.time_max is not None:
-    args.time_max = plot.formatter.inverse_convert_time(args.time_max)
+if args.boundary is not None:
+    plt.xlim(-args.boundary, args.boundary)
+    plt.ylim(-args.boundary, args.boundary)
 
-times = plot.data.time_range
-if args.time_min is not None:
-    times = times[times>=args.time_min]
-if args.time_max is not None:
-    times = times[times<=args.time_max]
-times = times[::args.time_every]
-
-frames = yp.save_frames(
-        times=times,
-        fig=fig,
-        plots=[plot],
-        output_dir=f"{args.var}_{args.sampling}",
-        prefix=f"frame_",
-        dpi=300,
-        )
-
-plt.close()
+plt.savefig(args.outputpath, dpi=200, bbox_inches='tight')
+print(args.outputpath)
