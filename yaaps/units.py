@@ -1,5 +1,16 @@
+"""
+Unit conversion module for GRAthena++ simulations.
+
+This module provides unit conversion factors and labels for converting
+simulation quantities from code units to physical (CGS or natural) units.
+The conversions are based on typical neutron star merger simulation scales.
+"""
+
 import re
 
+# Dictionary mapping variable names/patterns to (conversion_factor, unit_label) tuples.
+# The conversion factor converts from code units to the displayed units.
+# Keys can be strings (matched by endswith) or compiled regex patterns.
 units: dict[str | re.Pattern, tuple[float, str]] = {
     "rho": (6.175828477586656e+17, " [g cm$^{-3}$]"),
     "eps": (8.9875517873681764e+20, " [erg g$^{-1}$]"),
@@ -21,6 +32,30 @@ units: dict[str | re.Pattern, tuple[float, str]] = {
     }
 
 def apply_units(key: str) -> tuple[float, str]:
+    """
+    Get the unit conversion factor and label for a given variable key.
+
+    Looks up the variable name in the units dictionary to find the
+    appropriate conversion factor and unit label. Supports both exact
+    suffix matching (for string keys) and regex pattern matching.
+
+    Args:
+        key: The variable name to look up, e.g., "rho", "nu0_lum", "m_ej".
+
+    Returns:
+        A tuple (conversion_factor, unit_label) where:
+        - conversion_factor is a float to multiply code values by
+        - unit_label is a string suitable for axis labels (with LaTeX formatting)
+        
+        Returns (1.0, "") if no matching unit conversion is found.
+
+    Example:
+        >>> factor, label = apply_units("rho")
+        >>> factor
+        6.175828477586656e+17
+        >>> label
+        ' [g cm$^{-3}$]'
+    """
     for uk in units:
         if isinstance(uk, str) and key.endswith(uk):
             return units[uk]

@@ -1,3 +1,10 @@
+"""
+Input module for parsing Athena++ input/parameter files.
+
+This module provides utilities to read and interpret Athena++ parameter files,
+supporting hierarchical section-based organization and various data types.
+"""
+
 import re
 from collections.abc import Mapping
 from typing import Any
@@ -5,7 +12,37 @@ import numpy as np
 
 max_inp_len = 10000
 
+
 class Input(Mapping):
+    """
+    A class for parsing and accessing Athena++ input/parameter files.
+
+    This class reads Athena++ parameter files (typically .inp or .par files)
+    and provides dictionary-like access to the parameters organized by sections.
+
+    The file format consists of sections marked by <section_name> headers,
+    followed by key = value pairs. Comments starting with # or // are ignored.
+
+    Args:
+        file_path: Path to the input/parameter file to read.
+
+    Attributes:
+        data: Dictionary containing parsed sections and their parameters.
+        git_hash: Git hash extracted from the file header, if present.
+
+    Raises:
+        ValueError: If the file doesn't start with a section header or
+            contains invalid lines.
+        RuntimeError: If the file exceeds maximum length or can't be parsed.
+
+    Example:
+        >>> inp = Input("simulation.par")
+        >>> inp["mesh/nx1"]  # Access nested parameter
+        128
+        >>> inp.keys()  # Get section names
+        dict_keys(['job', 'mesh', 'meshblock', ...])
+    """
+
     def __init__(self, file_path):
         self.data = {}
         current_section = None
@@ -58,6 +95,19 @@ class Input(Mapping):
                 raise RuntimeError("Could not read input file")
 
     def __getitem__(self, key):
+        """
+        Get a parameter value using slash-separated key notation.
+
+        Args:
+            key: Parameter key, optionally with section prefix separated by '/'.
+                For example, 'mesh/nx1' accesses self.data['mesh']['nx1'].
+
+        Returns:
+            The parameter value.
+
+        Raises:
+            KeyError: If the key is not found.
+        """
         keys = key.split('/')
         result = self.data
         for k in keys:
@@ -65,16 +115,31 @@ class Input(Mapping):
         return result
 
     def __iter__(self):
+        """Return an iterator over the section names."""
         return iter(self.data)
 
     def __len__(self):
+        """Return the number of sections in the input file."""
         return len(self.data)
 
     def keys(self):
+        """Return the section names as dictionary keys."""
         return self.data.keys()
 
     @staticmethod
     def _interprete_value(value):
+        """
+        Parse a string value into the appropriate Python type.
+
+        Attempts to convert the value to int, float, bool, or list.
+        If none of these conversions work, returns the original string.
+
+        Args:
+            value: String value to interpret.
+
+        Returns:
+            Interpreted value as int, float, bool, list, or str.
+        """
         value = value.strip()
         if value.startswith("[") and value.endswith("]"):
             return list(map(Input._interprete_value, value[1:-1].split(",")))
@@ -91,7 +156,23 @@ class Input(Mapping):
 
     def diff(self, other: "Input", float_tol: float = 1e-8) -> dict[str, dict[str, Any]]:
         """
-        Compare two dictionaries and return the differences.
+        Compare this input file with another and return the differences.
+
+        Args:
+            other: Another Input instance to compare against.
+            float_tol: Relative tolerance for comparing floating-point values.
+                Two floats are considered equal if 2*(v1-v2) < float_tol*(v1+v2).
+
+        Returns:
+            A nested dictionary where keys are section names and values are
+            dictionaries of differing parameters. Each parameter entry contains
+            a tuple (value_in_self, value_in_other). Missing values are
+            represented as " - ".
+
+        Example:
+            >>> diff = inp1.diff(inp2)
+            >>> diff['mesh']['nx1']
+            (128, 256)  # inp1 has 128, inp2 has 256
         """
         diff = {}
         for grp in {*self.keys(), *other.keys()}:
