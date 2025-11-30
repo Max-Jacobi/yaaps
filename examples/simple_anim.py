@@ -62,11 +62,10 @@ kwargs = dict(
     func=func,
     sampling=args.sampling,
     cmap=args.cmap,
-    draw_meshblocks=args.meshblocks,
     vmin=args.vmin,
     vmax=args.vmax,
     ax=ax,
-    format="paper" if args.paper_format else "raw",
+    formatter="paper" if args.paper_format else "raw",
     )
 
 for k, v in list(kwargs.items()):
@@ -74,6 +73,11 @@ for k, v in list(kwargs.items()):
         kwargs.pop(k)
 
 plot = yp.NativeColorPlot(sim=sim, **kwargs)
+if args.time_min is not None:
+    args.time_min = plot.formatter.inverse_convert_time(args.time_min)
+
+if args.time_max is not None:
+    args.time_max = plot.formatter.inverse_convert_time(args.time_max)
 
 times = plot.data.time_range
 if args.time_min is not None:

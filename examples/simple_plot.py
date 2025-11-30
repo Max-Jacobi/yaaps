@@ -54,6 +54,11 @@ if args.outputpath is None:
 
 func = eval(args.func)
 
+if args.paper_format:
+    formatter = ya.plot_formatter.PlotFormatter("paper")
+    args.time = formatter.inverse_convert_time(args.time)
+
+
 fig, ax = plt.subplots(1, figsize=(4,3.5))
 kwargs = dict(
     var=args.var,
@@ -62,11 +67,10 @@ kwargs = dict(
     func=func,
     sampling=args.sampling,
     cmap=args.cmap,
-    draw_meshblocks=args.meshblocks,
     vmin=args.vmin,
     vmax=args.vmax,
     ax=ax,
-    paper_format="paper" if args.paper_format else "raw",
+    formatter="paper" if args.paper_format else "raw",
 )
 
 for k, v in list(kwargs.items()):

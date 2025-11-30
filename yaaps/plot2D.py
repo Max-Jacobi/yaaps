@@ -732,7 +732,10 @@ class QuiverPlot(Plot):
         self.kwargs = kwargs
         x_grid, y_grid = self._create_grid(bounds, N_arrows)
         self.grid = np.stack((x_grid.ravel(), y_grid.ravel())).T
-        self.quiv = self.ax.quiver(x_grid, y_grid, np.zeros_like(x_grid), np.zeros_like(y_grid), **self.kwargs)
+        converted_x_grid = self.formatter.convert_coordinate(data.sampling[0], x_grid)
+        converted_y_grid = self.formatter.convert_coordinate(data.sampling[1], y_grid)
+        self.quiv = self.ax.quiver(converted_x_grid, converted_y_grid,
+                                   np.zeros_like(x_grid), np.zeros_like(y_grid), **self.kwargs)
 
     def plot(self, time: float) -> list[Artist]:
         """
@@ -836,10 +839,13 @@ class StreamPlot(Plot):
         self.data = data
         self.kwargs = kwargs
         self.x_grid, self.y_grid = self._create_grid(bounds, N_points)
+        self.converted_x_grid = self.formatter.convert_coordinate(data.sampling[0], self.x_grid)
+        self.converted_y_grid = self.formatter.convert_coordinate(data.sampling[1], self.y_grid)
         self.grid = np.stack(np.meshgrid(self.x_grid, self.y_grid, indexing='ij'), axis=-1)
         u_grid = np.zeros((len(self.x_grid), len(self.y_grid)))
         v_grid = np.zeros((len(self.x_grid), len(self.y_grid)))
-        self.stream = self.ax.streamplot(self.x_grid, self.y_grid, u_grid, v_grid, **self.kwargs)
+        self.stream = self.ax.streamplot(self.converted_x_grid, self.converted_y_grid,
+                                         u_grid, v_grid, **self.kwargs)
 
     def plot(self, time: float) -> list[Artist]:
         """
@@ -855,7 +861,8 @@ class StreamPlot(Plot):
         # Set title using formatter
         self.ax.set_title(self.formatter.format_title(self.data.var, time))
         u_grid, v_grid = self.data.interp(self.grid, time=time)
-        self.stream = self.ax.streamplot(self.x_grid, self.y_grid, u_grid, v_grid, **self.kwargs)
+        self.stream = self.ax.streamplot(self.converted_x_grid, self.converted_y_grid,
+                                         u_grid, v_grid, **self.kwargs)
         return [self.stream.lines, self.stream.arrows]
 
     def _create_grid(self, bounds, N_arrows) -> tuple[np.ndarray, np.ndarray]:

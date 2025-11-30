@@ -227,6 +227,44 @@ class PlotFormatter:
             scale, _ = self.unit_converter.get_conversion(coord_name)
             return coord_data * scale
 
+
+    def inverse_convert_time(self, time: float) -> float:
+        """
+        Inverse convert time from physical units back to code units.
+
+        This is useful when a time in physical units needs to be converted
+        back to code units for data retrieval.
+
+        Args:
+            time: Time value in physical units.
+        Returns:
+            Time value in code units.
+        """
+        if self.mode == "raw":
+            return time
+        else:
+            scale, _ = self.unit_converter.get_conversion("time")
+            return time / scale
+
+    def inverse_convert_coordinate(self, coord_name: str, coord_data: np.ndarray) -> np.ndarray:
+        """
+        Inverse convert coordinate values from physical units back to code units.
+
+        This is useful when coordinates in physical units need to be converted
+        back to code units for data retrieval.
+
+        Args:
+            coord_name: The coordinate name (e.g., "x1v", "x2v", "x3v").
+            coord_data: NumPy array of coordinate values in physical
+        Returns:
+            NumPy array of coordinate values in code units.
+        """
+        if self.mode == "raw":
+            return coord_data
+        else:
+            scale, _ = self.unit_converter.get_conversion(coord_name)
+            return coord_data / scale
+
     def _format_axis_label_paper(self, field_name: str) -> str:
         """
         Format axis label in paper mode with LaTeX and units.
