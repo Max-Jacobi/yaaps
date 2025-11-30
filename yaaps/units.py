@@ -34,10 +34,10 @@ units: dict[str | re.Pattern, tuple[float, str]] = {
     # "mass": (1.988409870967742e+33, " [g]"),
     "energy": (1.7870936689836656e+53, " [erg]"),
     "time": (0.004925490948309319, " [ms]"),
-    # "r": (1.4766250382504018, " [km]"),
-    # "x": (1.4766250382504018, " [km]"),
-    # "y": (1.4766250382504018, " [km]"),
-    # "z": (1.4766250382504018, " [km]"),
+    "r": (1.4766250382504018, " [km]"),
+    "x": (1.4766250382504018, " [km]"),
+    "y": (1.4766250382504018, " [km]"),
+    "z": (1.4766250382504018, " [km]"),
     "mass": (1.0, r" [$M_\odot$]"),
     re.compile(r"nu\d_lum"): (3.628132869648639e+59, " [erg s$^{-1}$]"),
     re.compile(r"nu\d_en"): (1.11545707207968e+60, " [MeV]"),
@@ -45,6 +45,7 @@ units: dict[str | re.Pattern, tuple[float, str]] = {
     re.compile("mdot_ej"): (203025.44670054692, r" [$M_\odot$ s$^{-1}$]"),
     re.compile("util_u"): (1.0, r" [$c$]"),
     re.compile("vel"): (1.0, r" [$c$]"),
+    re.compile("x[1-3][vf]?"): (1.4766250382504018, " [km]"),
     }
 
 
@@ -179,6 +180,9 @@ class FieldLabels:
         """
         self._labels: dict[str, str] = {
             # Coordinates
+            "x1": r"$x$",
+            "x2": r"$y$",
+            "x3": r"$z$",
             "x1v": r"$x$",
             "x2v": r"$y$",
             "x3v": r"$z$",
@@ -190,7 +194,7 @@ class FieldLabels:
             "rho": r"$\rho$",
             "p": r"$P$",
             "P": r"$P$",
-            "eps": r"$\epsilon$",
+            "eps": r"$\varepsilon$",
             # Hydrodynamic variables - full names
             "hydro.prim.rho": r"$\rho$",
             "hydro.prim.p": r"$P$",
@@ -200,21 +204,27 @@ class FieldLabels:
             "passive_scalar.r_0": r"$Y_e$",
             "s": r"$s$",
             # Velocities - short aliases
-            "util_x": r"$u^x$",
-            "util_y": r"$u^y$",
-            "util_z": r"$u^z$",
+            "util_x": r"$\tilde{u}^x$",
+            "util_y": r"$\tilde{u}^y$",
+            "util_z": r"$\tilde{u}^z$",
             # Velocities - full names
-            "hydro.prim.util_u_1": r"$u^x$",
-            "hydro.prim.util_u_2": r"$u^y$",
-            "hydro.prim.util_u_3": r"$u^z$",
+            "hydro.prim.util_u_1": r"$\tilde{u}^x$",
+            "hydro.prim.util_u_2": r"$\tilde{u}^y$",
+            "hydro.prim.util_u_3": r"$\tilde{u}^z$",
             # Magnetic fields - short aliases
             "B_x": r"$B^x$",
             "B_y": r"$B^y$",
             "B_z": r"$B^z$",
+            "b_x": r"$b^x$",
+            "b_y": r"$b^y$",
+            "b_z": r"$b^z$",
             # Magnetic fields - full names
             "B.Bcc_1": r"$B^x$",
             "B.Bcc_2": r"$B^y$",
             "B.Bcc_3": r"$B^z$",
+            "field.aux.b_u_1": r"$b^x$",
+            "field.aux.b_u_2": r"$b^y$",
+            "field.aux.b_u_3": r"$b^z$",
         }
 
     def get_label(self, field_name: str) -> str:
@@ -256,39 +266,3 @@ class FieldLabels:
             '$\\\\phi$'
         """
         self._labels[field_name] = label
-
-
-def apply_units(key: str) -> tuple[float, str]:
-    """
-    Get the unit conversion factor and label for a given variable key.
-
-    This function is provided for backward compatibility. For new code,
-    consider using the UnitConverter class instead.
-
-    Looks up the variable name in the units dictionary to find the
-    appropriate conversion factor and unit label. Supports both exact
-    suffix matching (for string keys) and regex pattern matching.
-
-    Args:
-        key: The variable name to look up, e.g., "rho", "nu0_lum", "m_ej".
-
-    Returns:
-        A tuple (conversion_factor, unit_label) where:
-        - conversion_factor is a float to multiply code values by
-        - unit_label is a string suitable for axis labels (with LaTeX formatting)
-
-        Returns (1.0, "") if no matching unit conversion is found.
-
-    Example:
-        >>> factor, label = apply_units("rho")
-        >>> factor
-        6.175828477586656e+17
-        >>> label
-        ' [g cm$^{-3}$]'
-    """
-    for uk in units:
-        if isinstance(uk, str) and key.endswith(uk):
-            return units[uk]
-        if isinstance(uk, re.Pattern) and re.match(uk, key) is not None:
-            return units[uk]
-    return 1.0, ""

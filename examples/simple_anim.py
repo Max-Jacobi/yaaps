@@ -35,6 +35,8 @@ ap.add_argument('--vmin', type=float, default=None,
                 help="Minimum of the colorscale")
 ap.add_argument('--vmax', type=float, default=None,
                 help="Maximum of the colorscale")
+ap.add_argument('-p', '--paper-format', action='store_true',
+                help="Use paper-ready and units format for labels")
 
 if len(sys.argv) == 1:
     sim = ya.Simulation("active")
@@ -64,6 +66,7 @@ kwargs = dict(
     vmin=args.vmin,
     vmax=args.vmax,
     ax=ax,
+    format="paper" if args.paper_format else "raw",
     )
 
 for k, v in list(kwargs.items()):
@@ -72,13 +75,13 @@ for k, v in list(kwargs.items()):
 
 plot = yp.NativeColorPlot(sim=sim, **kwargs)
 
-times = plot.time_range
+times = plot.data.time_range
 if args.time_min is not None:
     times = times[times>=args.time_min]
 if args.time_max is not None:
     times = times[times<=args.time_max]
 times = times[::args.time_every]
-    
+
 frames = yp.save_frames(
         times=times,
         fig=fig,
@@ -89,4 +92,3 @@ frames = yp.save_frames(
         )
 
 plt.close()
-

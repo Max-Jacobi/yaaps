@@ -92,7 +92,7 @@ class PlotFormatter:
         """
         self.mode = mode
 
-    def format_axis_label(self, field_name: str, axis: str = "") -> str:
+    def format_axis_label(self, field_name: str) -> str:
         """
         Format an axis label based on the current mode.
 
@@ -101,24 +101,20 @@ class PlotFormatter:
 
         Args:
             field_name: The variable name to format (e.g., "rho", "x1v").
-            axis: Optional axis identifier (e.g., "x", "y"). If provided in
-                raw mode, returns this instead of field_name.
 
         Returns:
             Formatted axis label string.
 
         Example:
             >>> formatter = PlotFormatter(mode="paper")
-            >>> formatter.format_axis_label("rho")
-            '$\\rho$ [g cm$^{-3}$]'
-            >>> formatter.format_axis_label("x1v", axis="x")
+            >>> formatter.format_axis_label("x1v")
             '$x$ [km]'
             >>> formatter.set_mode("raw")
-            >>> formatter.format_axis_label("x1v", axis="x")
-            'x'
+            >>> formatter.format_axis_label("x1v")
+            'x1v'
         """
         if self.mode == "raw":
-            return self._format_axis_label_raw(field_name, axis)
+            return field_name
         else:
             return self._format_axis_label_paper(field_name)
 
@@ -145,7 +141,7 @@ class PlotFormatter:
             'rho @ t= 100.00'
         """
         if self.mode == "raw":
-            return self._format_title_raw(field_name, time)
+            return f"{field_name} @ t= {time:.2f}"
         else:
             return self._format_title_paper(field_name, time)
 
@@ -171,7 +167,7 @@ class PlotFormatter:
             'rho'
         """
         if self.mode == "raw":
-            return self._format_colorbar_label_raw(field_name)
+            return field_name
         else:
             return self._format_colorbar_label_paper(field_name)
 
@@ -231,21 +227,6 @@ class PlotFormatter:
             scale, _ = self.unit_converter.get_conversion(coord_name)
             return coord_data * scale
 
-    def _format_axis_label_raw(self, field_name: str, axis: str = "") -> str:
-        """
-        Format axis label in raw mode.
-
-        Args:
-            field_name: The variable name.
-            axis: Optional axis identifier.
-
-        Returns:
-            The axis identifier if provided, otherwise the field name.
-        """
-        if axis:
-            return axis
-        return field_name
-
     def _format_axis_label_paper(self, field_name: str) -> str:
         """
         Format axis label in paper mode with LaTeX and units.
@@ -261,19 +242,6 @@ class PlotFormatter:
         if unit:
             return f"{label}{unit}"
         return label
-
-    def _format_title_raw(self, field_name: str, time: float) -> str:
-        """
-        Format title in raw mode.
-
-        Args:
-            field_name: The variable name.
-            time: Simulation time in code units.
-
-        Returns:
-            Title string in format "field_name @ t= time".
-        """
-        return f"{field_name} @ t= {time:.2f}"
 
     def _format_title_paper(self, field_name: str, time: float) -> str:
         """
@@ -293,18 +261,6 @@ class PlotFormatter:
         # Remove leading space from unit if present
         time_unit_clean = time_unit.strip() if time_unit else ""
         return f"{label} @ {time_label} = {converted_time:.2f} {time_unit_clean}"
-
-    def _format_colorbar_label_raw(self, field_name: str) -> str:
-        """
-        Format colorbar label in raw mode.
-
-        Args:
-            field_name: The variable name.
-
-        Returns:
-            The field name as-is.
-        """
-        return field_name
 
     def _format_colorbar_label_paper(self, field_name: str) -> str:
         """

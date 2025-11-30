@@ -93,26 +93,38 @@ class Plot(ABC):
 
     Attributes:
         ax: The matplotlib Axes object for this plot.
-        formatter: The PlotFormatter instance for label and unit handling.
+        formatter: The PlotFormatter instance or str for label and unit handling.
     """
 
     ax: Axes
     formatter: PlotFormatter
 
-    def __init__(self, ax: (Axes | None), formatter: PlotFormatter | None = None):
+    def __init__(self, ax: (Axes | None), formatter: PlotFormatter | str | None = None):
         """
         Initialize the plot.
 
         Args:
             ax: Matplotlib Axes object. If None, uses the current axes.
-            formatter: PlotFormatter instance for label formatting. If None,
-                uses a default PlotFormatter in "raw" mode.
+            formatter: PlotFormatter instance or str for label formatting or str
+                specifying mode ("raw" or "paper"). If None, uses default
+                PlotFormatter in "raw" mode.
+
+        Raises:
+            TypeError: If formatter is not a PlotFormatter, str, or None.
         """
         if ax is None:
             self.ax = plt.gca()
         else:
             self.ax = ax
-        self.formatter = formatter if formatter is not None else PlotFormatter(mode="raw")
+        self.formatter = formatter
+        if isinstance(formatter, str):
+            self.formatter = PlotFormatter(mode=formatter)
+        elif isinstance(formatter, PlotFormatter):
+            self.formatter = formatter
+        elif formatter is None:
+            self.formatter = PlotFormatter(mode="raw")
+        else:
+            raise TypeError("formatter must be a PlotFormatter, str, or None")
 
     def set_plot_mode(self, mode: PlotMode) -> None:
         """
@@ -164,7 +176,7 @@ class TimeBarPlot(Plot):
 
     Args:
         ax: Matplotlib Axes object. If None, uses current axes.
-        formatter: PlotFormatter instance for label formatting.
+        formatter: PlotFormatter instance or str for label formatting.
         **kwargs: Keyword arguments passed to ax.axvline().
 
     Attributes:
@@ -174,7 +186,7 @@ class TimeBarPlot(Plot):
     def __init__(
         self,
         ax: (Axes | None),
-        formatter: PlotFormatter | None = None,
+        formatter: PlotFormatter | str | None = None,
         **kwargs
     ):
         super().__init__(ax=ax, formatter=formatter)
@@ -209,7 +221,7 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
         cax: Axes object for the colorbar, if any.
         cbar: Whether a colorbar is displayed.
         data: The MeshData object providing the data.
-        formatter: PlotFormatter instance for label and unit handling.
+        formatter: PlotFormatter instance or str for label and unit handling.
         func: Optional function to transform data before plotting.
         kwargs: Keyword arguments for pcolormesh.
         ims: List of pcolormesh artists created.
@@ -225,7 +237,7 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
         ax: (Axes | None) = None,
         cbar: (Axes | bool) = True,
         func: Callable | None = None,
-        formatter: PlotFormatter | None = None,
+        formatter: PlotFormatter | str | None = None,
         **kwargs):
         """
         Initialize the color plot.
@@ -236,7 +248,7 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
             cbar: If True, create a colorbar. If an Axes object, use it for
                 the colorbar. If False, no colorbar.
             func: Optional function to apply to data before plotting.
-            formatter: PlotFormatter instance for label formatting. If None,
+            formatter: PlotFormatter instance or str for label formatting. If None,
                 uses a default PlotFormatter in "raw" mode.
             **kwargs: Additional keyword arguments passed to pcolormesh.
         """
@@ -252,10 +264,8 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
             self.cax = cbar
 
         # Set axis labels using formatter
-        x_label = self.formatter.format_axis_label(
-            self.data.sampling[0], axis=self.data.sampling[0][:2])
-        y_label = self.formatter.format_axis_label(
-            self.data.sampling[1], axis=self.data.sampling[1][:2])
+        x_label = self.formatter.format_axis_label(self.data.sampling[0])
+        y_label = self.formatter.format_axis_label(self.data.sampling[1])
         self.ax.set_xlabel(x_label)
         self.ax.set_ylabel(y_label)
         self.ax.set_aspect('equal')
@@ -326,7 +336,7 @@ class ScatterPlot(Plot, ABC):
     Attributes:
         cax: Axes object for the colorbar, if any.
         cbar: Whether a colorbar is displayed.
-        formatter: PlotFormatter instance for label and unit handling.
+        formatter: PlotFormatter instance or str for label and unit handling.
         scat: The PathCollection object from ax.scatter().
         kwargs: Keyword arguments for scatter.
     """
@@ -341,7 +351,7 @@ class ScatterPlot(Plot, ABC):
         ax: (Axes | None) = None,
         cbar: (Axes | bool) = False,
         with_c: bool = False,
-        formatter: PlotFormatter | None = None,
+        formatter: PlotFormatter | str | None = None,
         **kwargs,
         ) -> list[Artist]:
         """
@@ -352,7 +362,7 @@ class ScatterPlot(Plot, ABC):
             ax: Matplotlib Axes object. If None, uses current axes.
             cbar: If True, create a colorbar. If an Axes object, use it.
             with_c: If True, initialize with color values for each point.
-            formatter: PlotFormatter instance for label formatting. If None,
+            formatter: PlotFormatter instance or str for label formatting. If None,
                 uses a default PlotFormatter in "raw" mode.
             **kwargs: Additional keyword arguments passed to ax.scatter().
 
@@ -426,7 +436,7 @@ class MeshBlockPlot(Plot, ABC):
     def init_meshblocks(
         self,
         ax: (Axes | None) = None,
-        formatter: PlotFormatter | None = None,
+        formatter: PlotFormatter | str | None = None,
         **kwargs,
         ):
         """
@@ -434,7 +444,7 @@ class MeshBlockPlot(Plot, ABC):
 
         Args:
             ax: Matplotlib Axes object. If None, uses current axes.
-            formatter: PlotFormatter instance for label formatting. If None,
+            formatter: PlotFormatter instance or str for label formatting. If None,
                 uses a default PlotFormatter in "raw" mode.
             **kwargs: Keyword arguments for Rectangle patches. Defaults:
                 edgecolor='k', facecolor='none', linewidth=0.5, alpha=0.5.
@@ -482,7 +492,7 @@ class NativeColorPlot(ColorPlot[Native]):
         sim: The Simulation object to load data from.
         var: Variable name to plot.
         sampling: Coordinate sampling, e.g., ('x1v', 'x2v') or 'xy'.
-        formatter: PlotFormatter instance for label formatting. If None,
+        formatter: PlotFormatter instance or str for label formatting. If None,
             uses a default PlotFormatter in "raw" mode.
         **kwargs: Additional arguments passed to ColorPlot.
 
@@ -500,7 +510,7 @@ class NativeColorPlot(ColorPlot[Native]):
         sim: "Simulation",
         var: str,
         sampling: Sampling = ('x1v', 'x2v'),
-        formatter: PlotFormatter | None = None,
+        formatter: PlotFormatter | str | None = None,
         **kwargs
         ):
         data = Native(sim, var, sampling)
@@ -521,7 +531,7 @@ class DerivedColorPlot(ColorPlot[Derived]):
         depends: Tuple of variable names that this quantity depends on.
         definition: Callable that computes the derived quantity.
         sampling: Coordinate sampling, e.g., ('x1v', 'x2v').
-        formatter: PlotFormatter instance for label formatting. If None,
+        formatter: PlotFormatter instance or str for label formatting. If None,
             uses a default PlotFormatter in "raw" mode.
         **kwargs: Additional arguments passed to ColorPlot.
 
@@ -540,7 +550,7 @@ class DerivedColorPlot(ColorPlot[Derived]):
         depends: tuple[str, ...],
         definition: Callable,
         sampling: Sampling = ('x1v', 'x2v'),
-        formatter: PlotFormatter | None = None,
+        formatter: PlotFormatter | str | None = None,
         **kwargs
         ):
         data = Derived(sim, var, depends, definition, sampling)
@@ -563,7 +573,7 @@ class TracerPlot(ScatterPlot):
         color_key: Optional key for color-mapping the points.
         trail_len: If > 0, draw trailing lines of this time duration.
         line_kwargs: Keyword arguments for the trailing lines.
-        formatter: PlotFormatter instance for label formatting. If None,
+        formatter: PlotFormatter instance or str for label formatting. If None,
             uses a default PlotFormatter in "raw" mode.
         **kwargs: Additional arguments passed to ScatterPlot.init_plot().
 
@@ -581,7 +591,7 @@ class TracerPlot(ScatterPlot):
         color_key: str | None = None,
         trail_len: float = 0,
         line_kwargs: dict = {},
-        formatter: PlotFormatter | None = None,
+        formatter: PlotFormatter | str | None = None,
         **kwargs
     ):
         self.tracers = tracers
@@ -678,7 +688,7 @@ class QuiverPlot(Plot):
             grid or tuple (N_x, N_y).
         ax: Matplotlib Axes object. If None, uses current axes.
         grid_type: Type of arrow placement grid, 'cartesian' or 'polar'.
-        formatter: PlotFormatter instance for label formatting. If None,
+        formatter: PlotFormatter instance or str for label formatting. If None,
             uses a default PlotFormatter in "raw" mode.
         **kwargs: Additional keyword arguments passed to ax.quiver().
 
@@ -695,7 +705,7 @@ class QuiverPlot(Plot):
         N_arrows: int | tuple[int, int] = 20,
         ax: (Axes | None) = None,
         grid_type: str = "cartesian",
-        formatter: PlotFormatter | None = None,
+        formatter: PlotFormatter | str | None = None,
         **kwargs,
     ):
         super().__init__(ax=ax, formatter=formatter)
@@ -785,7 +795,7 @@ class StreamPlot(Plot):
         N_points: Number of grid points per dimension for interpolation.
             Either an int for square grid or tuple (N_x, N_y).
         ax: Matplotlib Axes object. If None, uses current axes.
-        formatter: PlotFormatter instance for label formatting. If None,
+        formatter: PlotFormatter instance or str for label formatting. If None,
             uses a default PlotFormatter in "raw" mode.
         **kwargs: Additional keyword arguments passed to ax.streamplot().
 
@@ -801,7 +811,7 @@ class StreamPlot(Plot):
         bounds: tuple[float, float, float, float] | float,
         N_points: int | tuple[int, int] = 20,
         ax: (Axes | None) = None,
-        formatter: PlotFormatter | None = None,
+        formatter: PlotFormatter | str | None = None,
         **kwargs,
     ):
         super().__init__(ax=ax, formatter=formatter)
