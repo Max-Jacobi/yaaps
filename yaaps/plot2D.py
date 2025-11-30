@@ -217,6 +217,69 @@ class TimeBarPlot(Plot):
         self.li.remove()
 
 
+class MeshBlockPlot(Plot):
+    """
+    Mixin class for adding mesh block boundary overlays to plots.
+
+    Draws rectangles showing the boundaries of individual mesh blocks
+    in adaptive mesh refinement simulations.
+
+    Attributes:
+        mb_kwargs: Keyword arguments for the Rectangle patches.
+        collection: PatchCollection containing all mesh block rectangles.
+    """
+
+    def __init__(
+        self,
+        data: MeshData,
+        ax: (Axes | None) = None,
+        **kwargs,
+        ):
+        """
+        Initialize mesh block overlay rendering.
+
+        Args:
+            data: MeshData object providing meshblock coordinates.
+            ax: Matplotlib Axes object. If None, uses current axes.
+            formatter: PlotFormatter instance or str for label formatting. If None,
+                uses a default PlotFormatter in "raw" mode.
+            **kwargs: Keyword arguments for Rectangle patches. Defaults:
+                edgecolor='k', facecolor='none', linewidth=0.5, alpha=0.5.
+        """
+        super().__init__(ax=ax)
+        self.data = data
+
+        self.mb_kwargs = kwargs
+        self.mb_kwargs.setdefault('edgecolor', 'k')
+        self.mb_kwargs.setdefault('facecolor', 'none')
+        self.mb_kwargs.setdefault('linewidth', 0.5)
+        self.mb_kwargs.setdefault('alpha', 0.5)
+        self.collection = PatchCollection([], match_original=True)
+        self.ax.add_collection(self.collection)
+
+    def plot(self, time: float) -> list[Artist]:
+        """
+        Draw mesh block boundaries.
+
+        Args:
+            xyz: Tuple of coordinate arrays for each meshblock.
+
+        Returns:
+            List containing the PatchCollection artist.
+        """
+
+        xyz, *_ = self.data.load_data(time) # should be lru_cached
+        coll = [Rectangle((x1[0], x2[0]), x1[-1]-x1[0], x2[-1]-x2[0], **self.mb_kwargs)
+                for (x1, x2) in zip(*xyz)]
+        self.collection = PatchCollection(coll, match_original=True)
+        self.ax.add_collection(self.collection)
+        return [self.collection]
+
+    def clean(self):
+        """Remove the mesh block overlay from the axes."""
+        self.collection.remove()
+
+
 class ColorPlot[DataType: MeshData](Plot, ABC):
     """
     Generic 2D color plot class for mesh data (pcolormesh-based).
@@ -240,6 +303,7 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
     cax: (Axes | None) = None
     cbar: bool = False
     data: DataType
+    mb_plot: MeshBlockPlot | None
 
     def __init__(
         self,
@@ -248,6 +312,7 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
         cbar: (Axes | bool) = True,
         func: Callable | None = None,
         formatter: PlotFormatter | str | None = None,
+        draw_meshblocks: bool = False,
         **kwargs):
         """
         Initialize the color plot.
@@ -260,6 +325,7 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
             func: Optional function to apply to data before plotting.
             formatter: PlotFormatter instance or str for label formatting. If None,
                 uses a default PlotFormatter in "raw" mode.
+            draw_meshblocks: If True, overlay mesh block boundaries.
             **kwargs: Additional keyword arguments passed to pcolormesh.
         """
         super().__init__(ax=ax, formatter=formatter)
@@ -271,7 +337,13 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
             self.cax = make_cax(self.ax)
         elif isinstance(cbar, Axes):
             self.cbar = True
+
             self.cax = cbar
+        if draw_meshblocks:
+            self.mb_plot = MeshBlockPlot(ax=self.ax, data=self.data)
+        else:
+            self.mb_plot = None
+
 
         # Set axis labels using formatter
         x_label = self.formatter.format_axis_label(self.data.sampling[0])
@@ -324,6 +396,10 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
             cb = plt.colorbar(self.ims[-1], cax=self.cax)
             if self.formatter.mode == "paper":
                 cb.set_label(cbar_label)
+
+        if self.mb_plot is not None:
+            artists += self.mb_plot.plot(time)
+
         return artists
 
     def clean(self):
@@ -333,6 +409,8 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
         self.ims = []
         if self.cax is not None:
             self.cax.clear()
+        if self.mb_plot is not None:
+            self.mb_plot.clean()
 
 
 
@@ -434,67 +512,6 @@ class ScatterPlot(Plot, ABC):
         self.scat.remove()
 
 
-
-class MeshBlockPlot(Plot, ABC):
-    """
-    Mixin class for adding mesh block boundary overlays to plots.
-
-    Draws rectangles showing the boundaries of individual mesh blocks
-    in adaptive mesh refinement simulations.
-
-    Attributes:
-        mb_kwargs: Keyword arguments for the Rectangle patches.
-        collection: PatchCollection containing all mesh block rectangles.
-    """
-
-    def init_meshblocks(
-        self,
-        ax: (Axes | None) = None,
-        formatter: PlotFormatter | str | None = None,
-        **kwargs,
-        ):
-        """
-        Initialize mesh block overlay rendering.
-
-        Args:
-            ax: Matplotlib Axes object. If None, uses current axes.
-            formatter: PlotFormatter instance or str for label formatting. If None,
-                uses a default PlotFormatter in "raw" mode.
-            **kwargs: Keyword arguments for Rectangle patches. Defaults:
-                edgecolor='k', facecolor='none', linewidth=0.5, alpha=0.5.
-        """
-        super().__init__(ax=ax, formatter=formatter)
-
-        self.mb_kwargs = kwargs
-        self.mb_kwargs.setdefault('edgecolor', 'k')
-        self.mb_kwargs.setdefault('facecolor', 'none')
-        self.mb_kwargs.setdefault('linewidth', 0.5)
-        self.mb_kwargs.setdefault('alpha', 0.5)
-        self.collection = PatchCollection([], match_original=True)
-        self.ax.add_collection(self.collection)
-
-    def plot_meshblocks(self, xyz) -> list[Artist]:
-        """
-        Draw mesh block boundaries.
-
-        Args:
-            xyz: Tuple of coordinate arrays for each meshblock.
-
-        Returns:
-            List containing the PatchCollection artist.
-        """
-        coll = [Rectangle((x1[0], x2[0]), x1[-1]-x1[0], x2[-1]-x2[0], **self.mb_kwargs)
-                for (x1, x2) in zip(*xyz)]
-        self.collection = PatchCollection(coll, match_original=True)
-        self.ax.add_collection(self.collection)
-        return [self.collection]
-
-    def clean(self):
-        """Remove the mesh block overlay from the axes."""
-        self.collection.remove()
-
-
-
 class NativeColorPlot(ColorPlot[Native]):
     """
     2D color plot for native (directly stored) simulation variables.
@@ -524,12 +541,10 @@ class NativeColorPlot(ColorPlot[Native]):
         sim: "Simulation",
         var: str,
         sampling: Sampling = ('x1v', 'x2v'),
-        formatter: PlotFormatter | str | None = None,
         **kwargs
         ):
         data = Native(sim, var, sampling)
-        super().__init__(data=data, formatter=formatter, **kwargs)
-
+        super().__init__(data=data, **kwargs)
 
 
 class DerivedColorPlot(ColorPlot[Derived]):
@@ -545,8 +560,6 @@ class DerivedColorPlot(ColorPlot[Derived]):
         depends: Tuple of variable names that this quantity depends on.
         definition: Callable that computes the derived quantity.
         sampling: Coordinate sampling, e.g., ('x1v', 'x2v').
-        formatter: PlotFormatter instance or str for label formatting. If None,
-            uses a default PlotFormatter in "raw" mode.
         **kwargs: Additional arguments passed to ColorPlot.
 
     Example:
@@ -564,11 +577,10 @@ class DerivedColorPlot(ColorPlot[Derived]):
         depends: tuple[str, ...],
         definition: Callable,
         sampling: Sampling = ('x1v', 'x2v'),
-        formatter: PlotFormatter | str | None = None,
         **kwargs
         ):
         data = Derived(sim, var, depends, definition, sampling)
-        super().__init__(data=data, formatter=formatter, **kwargs)
+        super().__init__(data=data, **kwargs)
 
 
 

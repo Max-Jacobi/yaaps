@@ -69,6 +69,7 @@ kwargs = dict(
     cmap=args.cmap,
     vmin=args.vmin,
     vmax=args.vmax,
+    draw_meshblocks=args.meshblocks,
     ax=ax,
     formatter="paper" if args.paper_format else "raw",
 )
