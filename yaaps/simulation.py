@@ -75,7 +75,7 @@ class Simulation:
                     except ValueError:
                         ...
             else:
-                raise RuntimeError("Could not find valid parfile")
+                raise FileNotFoundError("Could not find valid parfile")
         else:
             self.input = Input(input_path)
 

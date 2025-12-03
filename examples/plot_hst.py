@@ -1,4 +1,5 @@
 import os
+import sys
 from math import isqrt
 import tempfile
 import argparse
@@ -39,7 +40,12 @@ ap.add_argument('--xlog', type=bool, default=False,
 
 args = ap.parse_args()
 
-sims = [ya.Simulation(sim) for sim in args.simdir]
+sims = []
+for sim in args.simdir:
+    try:
+        sims.append(ya.Simulation(sim))
+    except FileNotFoundError:
+        print(f"No parfile in {sim}, skipping", file=sys.stderr)
 
 vars = []
 for v in args.vars:
