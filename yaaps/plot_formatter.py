@@ -1,20 +1,24 @@
 """
 Plot formatting module for GRAthena++ simulation visualizations.
 
-This module provides the PlotFormatter class for handling plot labels and unit
-conversions in two modes: "raw" mode (code-internal naming) and "paper" mode
-(LaTeX labels with unit conversions for publication-ready figures).
+This module provides abstract base class PlotFormatter and concrete subclasses
+RawPlotFormatter and PaperPlotFormatter for handling plot labels and unit
+conversions.
+
+- RawPlotFormatter: Uses code-internal naming and no unit conversions
+- PaperPlotFormatter: Uses LaTeX labels with unit conversions for publication-ready figures
 
 Example:
-    >>> from yaaps.plot_formatter import PlotFormatter
-    >>> formatter = PlotFormatter(mode="paper")
+    >>> from yaaps.plot_formatter import PlotFormatter, RawPlotFormatter, PaperPlotFormatter
+    >>> formatter = PlotFormatter(mode="paper")  # Factory creates PaperPlotFormatter
     >>> formatter.format_axis_label("rho")
     '$\\rho$ [g cm$^{-3}$]'
-    >>> formatter.set_mode("raw")
-    >>> formatter.format_axis_label("rho")
+    >>> raw_formatter = RawPlotFormatter()
+    >>> raw_formatter.format_axis_label("rho")
     'rho'
 """
 
+from abc import ABC, abstractmethod
 from typing import Literal
 
 import numpy as np
@@ -31,30 +35,28 @@ Available modes:
 """
 
 
-class PlotFormatter:
+class PlotFormatterBase(ABC):
     """
-    Formatter class for plot labels and unit conversions.
+    Abstract base class for plot label formatting and unit conversions.
 
-    This class handles all label formatting and data conversions for plots,
-    supporting both "raw" mode (code-internal naming) and "paper" mode
-    (LaTeX labels with physical units).
+    This class defines the interface for all formatters. Subclasses must
+    implement the abstract methods to provide mode-specific formatting behavior.
 
     Attributes:
-        mode: Current formatting mode, either "raw" or "paper".
+        mode: The formatting mode identifier ("raw" or "paper").
         unit_converter: UnitConverter instance for unit conversions.
         field_labels: FieldLabels instance for LaTeX label mappings.
-
-    Example:
-        >>> formatter = PlotFormatter(mode="paper")
-        >>> formatter.format_axis_label("x1v", axis="x")
-        '$x$ [km]'
-        >>> formatter.format_title("rho", time=100.0)
-        '$\\rho$ @ $t$ = 0.49 ms'
     """
+
+    mode: PlotMode
+    unit_converter: UnitConverter
+    field_labels: FieldLabels
+
+    # Format string for titles
+    _title_format: str
 
     def __init__(
         self,
-        mode: PlotMode = "raw",
         unit_converter: UnitConverter | None = None,
         field_labels: FieldLabels | None = None,
     ):
@@ -62,68 +64,31 @@ class PlotFormatter:
         Initialize the PlotFormatter.
 
         Args:
-            mode: Formatting mode, either "raw" or "paper". Defaults to "raw".
             unit_converter: Optional UnitConverter instance. If None, uses
                 the default UnitConverter.
             field_labels: Optional FieldLabels instance. If None, uses
                 the default FieldLabels.
-
-        Example:
-            >>> formatter = PlotFormatter(mode="paper")
-            >>> formatter.mode
-            'paper'
         """
-        self.mode: PlotMode = mode
         self.unit_converter = unit_converter if unit_converter is not None else UnitConverter()
         self.field_labels = field_labels if field_labels is not None else FieldLabels()
 
-    def set_mode(self, mode: PlotMode) -> None:
-        """
-        Change the formatting mode.
-
-        Args:
-            mode: New formatting mode, either "raw" or "paper".
-
-        Example:
-            >>> formatter = PlotFormatter(mode="raw")
-            >>> formatter.set_mode("paper")
-            >>> formatter.mode
-            'paper'
-        """
-        self.mode = mode
-
+    @abstractmethod
     def format_axis_label(self, field_name: str) -> str:
         """
-        Format an axis label based on the current mode.
-
-        In "raw" mode, returns the field name as-is (or axis if provided).
-        In "paper" mode, returns a LaTeX-formatted label with units.
+        Format an axis label for the given field.
 
         Args:
             field_name: The variable name to format (e.g., "rho", "x1v").
 
         Returns:
             Formatted axis label string.
-
-        Example:
-            >>> formatter = PlotFormatter(mode="paper")
-            >>> formatter.format_axis_label("x1v")
-            '$x$ [km]'
-            >>> formatter.set_mode("raw")
-            >>> formatter.format_axis_label("x1v")
-            'x1v'
         """
-        if self.mode == "raw":
-            return field_name
-        else:
-            return self._format_axis_label_paper(field_name)
+        ...
 
+    @abstractmethod
     def format_title(self, field_name: str, time: float) -> str:
         """
-        Format a plot title with proper time units.
-
-        In "raw" mode, returns "field_name @ t= time".
-        In "paper" mode, returns "LaTeX_label @ $t$ = converted_time unit".
+        Format a plot title with field name and time.
 
         Args:
             field_name: The variable name to format.
@@ -131,187 +96,223 @@ class PlotFormatter:
 
         Returns:
             Formatted title string.
-
-        Example:
-            >>> formatter = PlotFormatter(mode="paper")
-            >>> formatter.format_title("rho", time=100.0)
-            '$\\rho$ @ $t$ = 0.49 ms'
-            >>> formatter.set_mode("raw")
-            >>> formatter.format_title("rho", time=100.0)
-            'rho @ t= 100.00'
         """
-        if self.mode == "raw":
-            return f"{field_name} @ t= {time:.2f}"
-        else:
-            return self._format_title_paper(field_name, time)
+        ...
 
+    @abstractmethod
     def format_colorbar_label(self, field_name: str) -> str:
         """
-        Format a colorbar label based on the current mode.
-
-        In "raw" mode, returns the field name.
-        In "paper" mode, returns a LaTeX-formatted label with units.
+        Format a colorbar label for the given field.
 
         Args:
             field_name: The variable name to format.
 
         Returns:
             Formatted colorbar label string.
-
-        Example:
-            >>> formatter = PlotFormatter(mode="paper")
-            >>> formatter.format_colorbar_label("rho")
-            '$\\rho$ [g cm$^{-3}$]'
-            >>> formatter.set_mode("raw")
-            >>> formatter.format_colorbar_label("rho")
-            'rho'
         """
-        if self.mode == "raw":
-            return field_name
-        else:
-            return self._format_colorbar_label_paper(field_name)
+        ...
 
+    @abstractmethod
     def convert_data(self, field_name: str, data: np.ndarray) -> np.ndarray:
         """
-        Convert data values based on the current mode.
-
-        In "raw" mode, returns data unchanged (identity transformation).
-        In "paper" mode, scales data by the appropriate conversion factor.
+        Convert data values to display units.
 
         Args:
             field_name: The variable name for unit lookup.
             data: NumPy array of data values in code units.
 
         Returns:
-            NumPy array of data values (in code units for raw mode,
-            in physical units for paper mode).
-
-        Example:
-            >>> import numpy as np
-            >>> formatter = PlotFormatter(mode="paper")
-            >>> data = np.array([1.0, 2.0, 3.0])
-            >>> converted = formatter.convert_data("rho", data)
-            >>> # Data scaled by density conversion factor
+            NumPy array of data values in display units.
         """
-        if self.mode == "raw":
-            return data
-        else:
-            scale, _ = self.unit_converter.get_conversion(field_name)
-            return data * scale
+        ...
 
+    @abstractmethod
     def convert_coordinate(self, coord_name: str, coord_data: np.ndarray) -> np.ndarray:
         """
-        Convert coordinate values based on the current mode.
-
-        In "raw" mode, returns coordinates unchanged.
-        In "paper" mode, scales coordinates by the appropriate factor (e.g., to km).
+        Convert coordinate values to display units.
 
         Args:
             coord_name: The coordinate name (e.g., "x1v", "x2v", "x3v").
             coord_data: NumPy array of coordinate values in code units.
 
         Returns:
-            NumPy array of coordinate values (in code units for raw mode,
-            in physical units for paper mode).
-
-        Example:
-            >>> import numpy as np
-            >>> formatter = PlotFormatter(mode="paper")
-            >>> coords = np.array([0.0, 10.0, 20.0])
-            >>> converted = formatter.convert_coordinate("x1v", coords)
-            >>> # Coordinates scaled to km
+            NumPy array of coordinate values in display units.
         """
-        if self.mode == "raw":
-            return coord_data
-        else:
-            scale, _ = self.unit_converter.get_conversion(coord_name)
-            return coord_data * scale
+        ...
 
-
+    @abstractmethod
     def inverse_convert_time(self, time: float) -> float:
         """
-        Inverse convert time from physical units back to code units.
-
-        This is useful when a time in physical units needs to be converted
-        back to code units for data retrieval.
+        Convert time from display units back to code units.
 
         Args:
-            time: Time value in physical units.
+            time: Time value in display units.
+
         Returns:
             Time value in code units.
         """
-        if self.mode == "raw":
-            return time
-        else:
-            scale, _ = self.unit_converter.get_conversion("time")
-            return time / scale
+        ...
 
+    @abstractmethod
     def inverse_convert_coordinate(self, coord_name: str, coord_data: np.ndarray) -> np.ndarray:
         """
-        Inverse convert coordinate values from physical units back to code units.
-
-        This is useful when coordinates in physical units need to be converted
-        back to code units for data retrieval.
+        Convert coordinate values from display units back to code units.
 
         Args:
             coord_name: The coordinate name (e.g., "x1v", "x2v", "x3v").
-            coord_data: NumPy array of coordinate values in physical
+            coord_data: NumPy array of coordinate values in display units.
+
         Returns:
             NumPy array of coordinate values in code units.
         """
-        if self.mode == "raw":
-            return coord_data
-        else:
-            scale, _ = self.unit_converter.get_conversion(coord_name)
-            return coord_data / scale
+        ...
 
-    def _format_axis_label_paper(self, field_name: str) -> str:
-        """
-        Format axis label in paper mode with LaTeX and units.
 
-        Args:
-            field_name: The variable name to format.
+class RawPlotFormatter(PlotFormatterBase):
+    """
+    Formatter for raw mode with code-internal naming and no unit conversions.
 
-        Returns:
-            LaTeX-formatted label with units.
-        """
+    This formatter returns field names as-is and performs no unit conversions
+    on data or coordinates.
+
+    Example:
+        >>> formatter = RawPlotFormatter()
+        >>> formatter.format_axis_label("x1v")
+        'x1v'
+        >>> formatter.format_title("rho", time=100.0)
+        'rho @ t= 100.00'
+    """
+
+    mode: PlotMode = "raw"
+    _title_format: str = "{field_name} @ t= {time:.2f}"
+
+    def format_axis_label(self, field_name: str) -> str:
+        """Return the field name as-is."""
+        return field_name
+
+    def format_title(self, field_name: str, time: float) -> str:
+        """Format title with raw field name and time."""
+        return self._title_format.format(field_name=field_name, time=time)
+
+    def format_colorbar_label(self, field_name: str) -> str:
+        """Return the field name as-is."""
+        return field_name
+
+    def convert_data(self, field_name: str, data: np.ndarray) -> np.ndarray:
+        """Return data unchanged (identity transformation)."""
+        return data
+
+    def convert_coordinate(self, coord_name: str, coord_data: np.ndarray) -> np.ndarray:
+        """Return coordinates unchanged (identity transformation)."""
+        return coord_data
+
+    def inverse_convert_time(self, time: float) -> float:
+        """Return time unchanged (identity transformation)."""
+        return time
+
+    def inverse_convert_coordinate(self, coord_name: str, coord_data: np.ndarray) -> np.ndarray:
+        """Return coordinates unchanged (identity transformation)."""
+        return coord_data
+
+
+class PaperPlotFormatter(PlotFormatterBase):
+    """
+    Formatter for paper mode with LaTeX labels and physical unit conversions.
+
+    This formatter returns LaTeX-formatted labels with units and converts
+    data and coordinates from code units to physical units.
+
+    Example:
+        >>> formatter = PaperPlotFormatter()
+        >>> formatter.format_axis_label("x1v")
+        '$x$ [km]'
+        >>> formatter.format_title("rho", time=100.0)
+        '$\\rho$ @ $t$ = 0.49 ms'
+    """
+
+    mode: PlotMode = "paper"
+    _label_unit_format: str = "{label}{unit}"
+    _title_format: str = "{label} @ {time_label} = {time:.2f} {time_unit}"
+
+    def format_axis_label(self, field_name: str) -> str:
+        """Return LaTeX-formatted label with units."""
         label = self.field_labels.get_label(field_name)
         _, unit = self.unit_converter.get_conversion(field_name)
         if unit:
-            return f"{label}{unit}"
+            return self._label_unit_format.format(label=label, unit=unit)
         return label
 
-    def _format_title_paper(self, field_name: str, time: float) -> str:
-        """
-        Format title in paper mode with LaTeX and converted time.
-
-        Args:
-            field_name: The variable name.
-            time: Simulation time in code units.
-
-        Returns:
-            LaTeX-formatted title with converted time and units.
-        """
+    def format_title(self, field_name: str, time: float) -> str:
+        """Format title with LaTeX label and converted time."""
         label = self.field_labels.get_label(field_name)
         time_scale, time_unit = self.unit_converter.get_conversion("time")
         converted_time = time * time_scale
         time_label = self.field_labels.get_label("time")
-        # Remove leading space from unit if present
         time_unit_clean = time_unit.strip() if time_unit else ""
-        return f"{label} @ {time_label} = {converted_time:.2f} {time_unit_clean}"
+        return self._title_format.format(
+            label=label,
+            time_label=time_label,
+            time=converted_time,
+            time_unit=time_unit_clean,
+        )
 
-    def _format_colorbar_label_paper(self, field_name: str) -> str:
-        """
-        Format colorbar label in paper mode with LaTeX and units.
-
-        Args:
-            field_name: The variable name to format.
-
-        Returns:
-            LaTeX-formatted label with units.
-        """
+    def format_colorbar_label(self, field_name: str) -> str:
+        """Return LaTeX-formatted label with units."""
         label = self.field_labels.get_label(field_name)
         _, unit = self.unit_converter.get_conversion(field_name)
         if unit:
-            return f"{label}{unit}"
+            return self._label_unit_format.format(label=label, unit=unit)
         return label
+
+    def convert_data(self, field_name: str, data: np.ndarray) -> np.ndarray:
+        """Scale data by the appropriate conversion factor."""
+        scale, _ = self.unit_converter.get_conversion(field_name)
+        return data * scale
+
+    def convert_coordinate(self, coord_name: str, coord_data: np.ndarray) -> np.ndarray:
+        """Scale coordinates by the appropriate conversion factor."""
+        scale, _ = self.unit_converter.get_conversion(coord_name)
+        return coord_data * scale
+
+    def inverse_convert_time(self, time: float) -> float:
+        """Convert time from physical units back to code units."""
+        scale, _ = self.unit_converter.get_conversion("time")
+        return time / scale
+
+    def inverse_convert_coordinate(self, coord_name: str, coord_data: np.ndarray) -> np.ndarray:
+        """Convert coordinates from physical units back to code units."""
+        scale, _ = self.unit_converter.get_conversion(coord_name)
+        return coord_data / scale
+
+
+def PlotFormatter(
+    mode: PlotMode = "raw",
+    unit_converter: UnitConverter | None = None,
+    field_labels: FieldLabels | None = None,
+) -> PlotFormatterBase:
+    """
+    Factory function to create an appropriate PlotFormatter subclass.
+
+    This function provides backward compatibility with the previous class-based API.
+
+    Args:
+        mode: Formatting mode, either "raw" or "paper". Defaults to "raw".
+        unit_converter: Optional UnitConverter instance. If None, uses
+            the default UnitConverter.
+        field_labels: Optional FieldLabels instance. If None, uses
+            the default FieldLabels.
+
+    Returns:
+        RawPlotFormatter if mode is "raw", PaperPlotFormatter if mode is "paper".
+
+    Example:
+        >>> formatter = PlotFormatter(mode="paper")
+        >>> isinstance(formatter, PaperPlotFormatter)
+        True
+        >>> formatter.format_axis_label("rho")
+        '$\\rho$ [g cm$^{-3}$]'
+    """
+    if mode == "raw":
+        return RawPlotFormatter(unit_converter=unit_converter, field_labels=field_labels)
+    else:
+        return PaperPlotFormatter(unit_converter=unit_converter, field_labels=field_labels)
