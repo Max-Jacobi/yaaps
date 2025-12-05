@@ -52,9 +52,8 @@ class PlotFormatterBase(ABC):
     unit_converter: UnitConverter
     field_labels: FieldLabels
 
-    # Format strings for titles
+    # Format string for titles
     _title_format: str
-    _time_title_format: str
 
     def __init__(
         self,
