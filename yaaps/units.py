@@ -60,15 +60,6 @@ class UnitConverter:
     Attributes:
         _conversions: Internal dictionary mapping variable names/patterns to
             (scale_factor, unit_string) tuples.
-
-    Example:
-        >>> converter = UnitConverter()
-        >>> scale, unit = converter.get_conversion("rho")
-        >>> print(f"Scale: {scale}, Unit: {unit}")
-        Scale: 6.175828477586656e+17, Unit:  [g cm$^{-3}$]
-        >>> converter.add_unit("my_var", 1000.0, " [custom]")
-        >>> converter.get_conversion("my_var")
-        (1000.0, ' [custom]')
     """
 
     def __init__(self):
@@ -78,11 +69,6 @@ class UnitConverter:
         The default conversions include common simulation variables like
         density (rho), specific energy (eps), pressure (P), time, and
         coordinate conversions.
-
-        Example:
-            >>> converter = UnitConverter()
-            >>> converter.get_conversion("time")
-            (0.004925490948309319, ' [ms]')
         """
         # Start with a copy of the global units dict
         self._conversions: dict[str | re.Pattern, tuple[float, str]] = dict(units)
@@ -110,15 +96,6 @@ class UnitConverter:
             - unit_string is a string suitable for axis labels (with LaTeX)
 
             Returns (1.0, "") if no matching conversion is found.
-
-        Example:
-            >>> converter = UnitConverter()
-            >>> converter.get_conversion("rho")
-            (6.175828477586656e+17, ' [g cm$^{-3}$]')
-            >>> converter.get_conversion("x1v")
-            (1.4766250382504018, ' [km]')
-            >>> converter.get_conversion("unknown_var")
-            (1.0, '')
         """
         for key in self._conversions:
             if isinstance(key, str) and field_name.endswith(key):
@@ -135,12 +112,6 @@ class UnitConverter:
             field_name: The variable name or pattern to add.
             scale: The conversion scale factor from code to physical units.
             unit: The unit string (with LaTeX formatting if desired).
-
-        Example:
-            >>> converter = UnitConverter()
-            >>> converter.add_unit("my_var", 1000.0, " [custom]")
-            >>> converter.get_conversion("my_var")
-            (1000.0, ' [custom]')
         """
         self._conversions[field_name] = (scale, unit)
 
@@ -155,15 +126,6 @@ class FieldLabels:
 
     Attributes:
         _labels: Internal dictionary mapping field names to LaTeX strings.
-
-    Example:
-        >>> labels = FieldLabels()
-        >>> labels.get_label("rho")
-        '$\\rho$'
-        >>> labels.get_label("hydro.prim.rho")
-        '$\\rho$'
-        >>> labels.get_label("unknown_var")
-        'unknown_var'
     """
 
     def __init__(self):
@@ -172,11 +134,6 @@ class FieldLabels:
 
         The default labels include common coordinates, hydrodynamic
         variables, passive scalars, velocities, and magnetic fields.
-
-        Example:
-            >>> labels = FieldLabels()
-            >>> labels.get_label("x1v")
-            '$x$'
         """
         self._labels: dict[str, str] = {
             # Coordinates
@@ -239,15 +196,6 @@ class FieldLabels:
 
         Returns:
             LaTeX-formatted label string, or the field_name if not found.
-
-        Example:
-            >>> labels = FieldLabels()
-            >>> labels.get_label("rho")
-            '$\\rho$'
-            >>> labels.get_label("hydro.prim.rho")
-            '$\\rho$'
-            >>> labels.get_label("unknown_var")
-            'unknown_var'
         """
         return self._labels.get(field_name, field_name)
 
@@ -258,11 +206,5 @@ class FieldLabels:
         Args:
             field_name: The variable name to add a label for.
             label: The LaTeX-formatted label string.
-
-        Example:
-            >>> labels = FieldLabels()
-            >>> labels.add_label("my_var", r"$\\phi$")
-            >>> labels.get_label("my_var")
-            '$\\\\phi$'
         """
         self._labels[field_name] = label
