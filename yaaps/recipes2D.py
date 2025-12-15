@@ -111,25 +111,74 @@ def raise_lower(vx, vy, vz,
 
 def radial_proj(vdx, vdy, vdz, *gd, xyz, sampling):
     """
-    Compute the radial projection of a covariant vector.
+    compute the radial projection of a covariant vector.
 
-    Projects a covariant vector onto the radial direction using the
+    projects a covariant vector onto the radial direction using the
     metric tensor to compute the proper radial distance.
 
-    Args:
-        vdx: The x-component of the covariant vector.
-        vdy: The y-component of the covariant vector.
-        vdz: The z-component of the covariant vector.
-        *gd: The six independent components of the covariant metric tensor
+    args:
+        vdx: the x-component of the covariant vector.
+        vdy: the y-component of the covariant vector.
+        vdz: the z-component of the covariant vector.
+        *gd: the six independent components of the covariant metric tensor
             (gxx, gxy, gxz, gyy, gyz, gzz).
-        xyz: Tuple of coordinate arrays organized by meshblocks.
-        sampling: Sampling specification tuple, e.g., ('x1v', 'x2v').
+        xyz: tuple of coordinate arrays organized by meshblocks.
+        sampling: sampling specification tuple, e.g., ('x1v', 'x2v').
 
-    Returns:
-        The radial projection of the vector, computed as (x^i * v_i) / r,
+    returns:
+        the radial projection of the vector, computed as (x^i * v_i) / r,
         where r is the proper radial distance.
     """
     xd, yd, zd = untangle_xyz(xyz, sampling)
     xu, yu, zu = raise_lower(xd, yd, zd, *gup(*gd))
     r = np.sqrt(xu*xd + yu*yd + zu*zd)
     return (xu*vdx + yu*vdy + zu*vdz)/r
+
+
+def normalize_vec(vx, vy, vz, *gd):
+    """
+    Normalize a covariant or contravariant vector using the metric tensor.
+    Computes the norm of a covariant vector and normalizes it to unit length
+    using the metric tensor.
+    Note that the metric tensor components must match the type of vector
+    provided (covariant or contravariant for contravariant or covariant vectors,
+    respectively).
+    args:
+        vdx: the x-component of the covariant vector.
+        vdy: the y-component of the covariant vector.
+        vdz: the z-component of the covariant vector.
+        *gd: the six independent components of the covariant metric tensor
+            (gxx, gxy, gxz, gyy, gyz, gzz).
+    returns:
+        a tuple (nvx, nvy, nvz) containing the normalized vector components.
+    """
+
+    vdx, vdy, vdz = raise_lower(vx, vy, vz, *gd)
+    norm = np.sqrt(vx*vdx + vy*vdy + vz*vdz)
+    nvx = vdx / norm
+    nvy = vdy / norm
+    nvz = vdz / norm
+    return nvx, nvy, nvz
+
+
+def absolute_val(vx, vy, vz, *gd):
+    """
+    Compute the absolute value (norm) of a covariant or contravariant vector.
+
+    Computes the norm of a covariant vector using the metric tensor.
+    Note that the metric tensor components must match the type of vector
+    provided (covariant or contravariant for contravariant or covariant vectors,
+    respectively).
+
+    Args:
+        vx: The x-component of the covariant vector.
+        vy: The y-component of the covariant vector.
+        vz: The z-component of the covariant vector.
+        *gd: The six independent components of the covariant metric tensor
+            (gxx, gxy, gxz, gyy, gyz, gzz).
+
+    Returns:
+        The absolute value (norm) of the vector.
+    """
+    vdx, vdy, vdz = raise_lower(vx, vy, vz, *gd)
+    return np.sqrt(vx*vdx + vy*vdy + vz*vdz)

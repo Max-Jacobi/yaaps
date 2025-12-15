@@ -307,7 +307,7 @@ class Derived(MeshData):
 
 
 
-class VectorMeshData(MeshData):
+class Vector(MeshData):
     """
     Data loader for vector field data on mesh grids.
 
@@ -362,7 +362,10 @@ class VectorMeshData(MeshData):
         self.iter_range = np.array([it for it in self.components[0].iter_range
                                     if all(np.isclose(it, dep.iter_range).any()
                                            for dep in self.components[1:])])
-        out = self.sim.scrape.get_var_info(self.components[0].var, self.sampling)[0]
+        if isinstance(self.components[0], Derived):
+            out = self.sim.scrape.get_var_info(self.components[0].depends[0].var, self.sampling)[0]
+        else:
+            out = self.sim.scrape.get_var_info(self.components[0].var, self.sampling)[0]
         self.time_range = np.array([self.sim.scrape.get_iter_time(out, it) for it in self.iter_range])
 
     @lru_cache(maxsize=1)
@@ -434,7 +437,7 @@ class VectorMeshData(MeshData):
         sim: "Simulation",
         vars: tuple[str, str, str],
         sampling: Sampling = ("x1v", "x2v"),
-    ) -> "VectorMeshData":
+    ) -> "Vector":
         """
         Create a VectorMeshData from native variable names.
 
@@ -450,7 +453,7 @@ class VectorMeshData(MeshData):
             A new VectorMeshData object.
 
         Example:
-            >>> vec = VectorMeshData.from_native(sim, ("velx", "vely", "velz"))
+            >>> vec = Vector.from_native(sim, ("velx", "vely", "velz"))
         """
         vx, vy, vz = (Native(sim, v, sampling) for v in vars)
         return cls((vx, vy, vz))

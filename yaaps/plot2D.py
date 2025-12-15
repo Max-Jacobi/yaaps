@@ -26,7 +26,7 @@ from tqdm import tqdm
 
 from .decorations import update_color_kwargs
 from .recipes2D import *
-from .datatypes import MeshData, Native, Derived, VectorMeshData, Sampling
+from .datatypes import MeshData, Native, Derived, Vector, Sampling
 from .plot_formatter import PlotFormatter, PlotFormatterBase, PlotMode
 if TYPE_CHECKING:
     from .simulation import Simulation
@@ -80,8 +80,6 @@ def interpolate_octree_to_grid(
     )
     grid_data = grid_data.reshape(len(grid_xyz[0]), len(grid_xyz[1]))
     return grid_data
-
-
 
 
 class Plot(ABC):
@@ -353,8 +351,8 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
             self.cax = make_cax(self.ax)
         elif isinstance(cbar, Axes):
             self.cbar = True
-
             self.cax = cbar
+
         if draw_meshblocks:
             self.mb_plot = MeshBlockPlot(ax=self.ax, data=self.data)
         else:
@@ -427,8 +425,6 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
             self.cax.clear()
         if self.mb_plot is not None:
             self.mb_plot.clean()
-
-
 
 class ScatterPlot(Plot, ABC):
     """
@@ -746,16 +742,18 @@ class QuiverPlot(Plot):
 
     def __init__(
         self,
-        data: VectorMeshData,
+        data: Vector,
         bounds: tuple[float, float, float, float] | float,
         N_arrows: int | tuple[int, int] = 20,
         ax: (Axes | None) = None,
         grid_type: str = "cartesian",
+        func: Callable | None = None,
         formatter: PlotFormatterBase | str | None = None,
         **kwargs,
     ):
         super().__init__(ax=ax, formatter=formatter)
         self.data = data
+        self.func = func
         self.grid_type = grid_type.lower()
         self.kwargs = kwargs
         x_grid, y_grid = self._create_grid(bounds, N_arrows)
@@ -778,6 +776,8 @@ class QuiverPlot(Plot):
         # Set title using formatter
         self.ax.set_title(self.formatter.format_title(self.data.var, time))
         u_grid, v_grid = self.data.interp(self.grid, time=time)
+        if self.func is not None:
+            u_grid, v_grid = self.func(u_grid, v_grid)
         self.quiv.set_UVC(u_grid, v_grid)
         return [self.quiv]
 
@@ -856,7 +856,7 @@ class StreamPlot(Plot):
 
     def __init__(
         self,
-        data: VectorMeshData,
+        data: Vector,
         bounds: tuple[float, float, float, float] | float,
         N_points: int | tuple[int, int] = 20,
         ax: (Axes | None) = None,
@@ -986,7 +986,7 @@ def save_frames(
     plots: tuple,
     post_draw: Callable[..., list[Artist]] | None = None,
     output_dir: str = "frames",
-    prefix: str = "frame",
+    prefix: str = "frame_",
     dpi: int | None = None,
     pbar: bool = True,
     **savefig_kwargs,
@@ -1063,3 +1063,210 @@ def make_cax(ax: Axes):
     cax = divider.append_axes("right", size="5%", pad="2%")
     plt.sca(ax)
     return cax
+
+class ContourPlot[DataType: MeshData](Plot, ABC):
+    """
+    Abstract base class for contour plots.
+    Provides functionality for creating contour plots.
+    Attributes:
+        cax: Axes object for the colorbar, if any.
+        cbar: Whether a colorbar is displayed.
+        formatter: PlotFormatterBase instance for label and unit handling.
+    """
+
+    def __init__(
+        self,
+        data: DataType,
+        bounds: float | tuple[float, float, float, float],
+        N_points: int | tuple[int, int] = 200,
+        ax: (Axes | None) = None,
+        cbar: (Axes | bool) = False,
+        formatter: PlotFormatterBase | str | None = None,
+        **kwargs
+        ):
+        """
+        Initialize the contour plot.
+
+        Args:
+            data: MeshData object providing the data to plot.
+            bounds: Domain bounds. Either a single float for symmetric bounds
+                (-bounds, bounds, -bounds, bounds) or a tuple (x_min, x_max, y_min, y_max).
+            N_points: Number of grid points per dimension for interpolation.
+                Either an int for square grid or tuple (N_x, N_y).
+            ax: Matplotlib Axes object. If None, uses current axes.
+            cbar: If True, create a colorbar. If an Axes object, use it for
+                the colorbar. If False, no colorbar.
+            formatter: PlotFormatterBase instance or str for label formatting. If None,
+                uses a default PlotFormatter in "raw" mode.
+            **kwargs: Additional keyword arguments passed to contour.
+        """
+
+        super().__init__(ax=ax, formatter=formatter)
+
+        self.data = data
+
+        self.x_grid, self.y_grid = self._create_grid(bounds, N_points)
+        self.converted_x_grid = self.formatter.convert_coordinate(data.sampling[0], self.x_grid)
+        self.converted_y_grid = self.formatter.convert_coordinate(data.sampling[1], self.y_grid)
+
+        self.grid = np.stack(np.meshgrid(self.x_grid, self.y_grid, indexing='ij'), axis=-1)
+
+        self.contours = None
+
+        if cbar is True:
+            self.cbar = True
+            self.cax = make_cax(self.ax)
+        elif isinstance(cbar, Axes):
+            self.cbar = True
+            self.cax = cbar
+        else:
+            self.cbar = False
+
+        self.kwargs = kwargs
+
+    def _create_grid(self, bounds, N_points) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Create the grid for streamline computation.
+
+        Args:
+            bounds: Domain bounds specification.
+            N_points: Number of grid points per dimension.
+
+        Returns:
+            Tuple of (x_grid, y_grid) 1D arrays.
+        """
+        if isinstance(N_points, int):
+            N_x, N_y = (N_points, N_points)
+        else:
+            N_x, N_y = N_points
+
+        if isinstance(bounds, Iterable):
+            x_min, x_max, y_min, y_max = bounds
+            x_grid = np.linspace(x_min, x_max, N_x)
+            y_grid = np.linspace(y_min, y_max, N_y)
+        else:
+            x_grid = np.linspace(-bounds, bounds, N_x)
+            y_grid = np.linspace(-bounds, bounds, N_y)
+        return x_grid, y_grid
+
+    def clean(self):
+        """Remove all contour artists from the axes."""
+        if self.contours is None:
+            return
+        for coll in self.contours.collections:
+            coll.remove()
+        self.contours = None
+
+    def plot(self, time: float) -> list[Artist]:
+        """
+        Create or update the contour plot at the given time.
+
+        Args:
+            time: Simulation time to plot.
+        Returns:
+            List of contour artists created.
+        """
+        self.clean()
+
+        data = self.data.interp(self.grid, time=time)
+        data = self.formatter.convert_data(self.data.var, data)
+        *_, actual_time = self.data.load_data(time)
+
+        self.kwargs = update_color_kwargs(self.data.var, self.kwargs, data=data)
+        if self.kwargs.get('colors', None) is not None:
+            self.kwargs.pop('cmap', None)
+
+        self.ax.set_title(self.formatter.format_title(self.data.var, actual_time))
+        coords = np.meshgrid(self.converted_x_grid, self.converted_y_grid, indexing='ij')
+
+        self.contours = self.ax.contour(*coords, data, **self.kwargs)
+
+        if self.cbar:
+            cbar_label = self.formatter.format_colorbar_label(self.data.var)
+            cb = plt.colorbar(self.contours, cax=self.cax)
+            cb.set_label(cbar_label)
+
+
+class NativeContourPlot(ContourPlot[Native]):
+    """
+    2D contour plot for native (directly stored) simulation variables.
+
+    Convenience class that creates a Native data loader and passes it
+    to ContourPlot.
+
+    Args:
+        sim: The Simulation object to load data from.
+        var: Variable name to plot.
+        sampling: Coordinate sampling, e.g., ('x1v', 'x2v') or 'xy'.
+        bounds: Domain bounds. Either a single float for symmetric bounds
+            (-bounds, bounds, -bounds, bounds) or a tuple (x_min, x_max, y_min, y_max).
+        N_points: Number of grid points per dimension for interpolation.
+            Either an int for square grid or tuple (N_x, N_y).
+        formatter: PlotFormatterBase instance or str for label formatting. If None,
+            uses a default PlotFormatter in "raw" mode.
+        **kwargs: Additional arguments passed to ContourPlot.
+
+    Example:
+        >>> plot = NativeContourPlot(sim, var="rho", sampling="xy", bounds=10.0)
+        >>> plot.plot(time=100.0)
+        >>> # With paper-ready formatting:
+        >>> from yaaps.plot_formatter import PlotFormatter
+        >>> formatter = PlotFormatter(mode="paper")
+        >>> plot = NativeContourPlot(sim, var="rho", bounds=10.0,
+        ...     formatter=formatter)
+    """
+
+    def __init__(
+        self,
+        sim: "Simulation",
+        var: str,
+        sampling: Sampling = ('x1v', 'x2v'),
+        bounds: float | tuple[float, float, float, float] = 10.0,
+        N_points: int | tuple[int, int] = 200,
+        **kwargs
+        ):
+        data = Native(sim, var, sampling)
+        super().__init__(data=data, bounds=bounds,
+                         N_points=N_points, **kwargs)
+
+class DerivedContourPlot(ContourPlot[Derived]):
+    """
+    2D contour plot for derived (computed) simulation variables.
+
+    Convenience class that creates a Derived data loader and passes it
+    to ContourPlot.
+
+    Args:
+        sim: The Simulation object to load data from.
+        var: Name for the derived variable.
+        depends: Tuple of variable names that this quantity depends on.
+        definition: Callable that computes the derived quantity.
+        sampling: Coordinate sampling, e.g., ('x1v', 'x2v').
+        bounds: Domain bounds. Either a single float for symmetric bounds
+            (-bounds, bounds, -bounds, bounds) or a tuple (x_min, x_max, y_min, y_max).
+        N_points: Number of grid points per dimension for interpolation.
+            Either an int for square grid or tuple (N_x, N_y).
+        **kwargs: Additional arguments passed to ContourPlot.
+    Example:
+        >>> def velocity_magnitude(vx, vy, vz):
+        ...     return np.sqrt(vx**2 + vy**2 + vz**2)
+        >>> plot = DerivedContourPlot(sim, var="|v|",
+        ...     depends=("velx", "vely", "velz"),
+        ...     definition=velocity_magnitude,
+        ...     bounds=10.0)
+    """
+
+    def __init__(
+        self,
+        sim: "Simulation",
+        var: str,
+        depends: tuple[str, ...],
+        definition: Callable,
+        sampling: Sampling = ('x1v', 'x2v'),
+        bounds: float | tuple[float, float, float, float] = 10.0,
+        N_points: int | tuple[int, int] = 200,
+        **kwargs
+        ):
+        data = Derived(sim, var, depends, definition, sampling)
+        super().__init__(data=data, bounds=bounds,
+                         N_points=N_points, **kwargs)

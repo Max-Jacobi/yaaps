@@ -35,8 +35,12 @@ ap.add_argument('-f','--funcs', type=str, nargs='+', default=[],
                 help="Modify plot with given functions in the form var:func (calls eval).")
 ap.add_argument('--ylog', type=str, nargs='+', default=[],
                 help="Vars to log scale the yaxis on")
+ap.add_argument('--ylim', type=str, nargs='+', default=[],
+                help="Combination of keys and respective limits for y axis, in the form var:min:max")
 ap.add_argument('--xlog', type=bool, default=False,
                 help="Log scale the xaxis")
+ap.add_argument('--xlim', type=float, nargs=2, default=None,
+                help="Limits for x axis")
 
 args = ap.parse_args()
 
@@ -81,6 +85,11 @@ def eval_f(f: str) -> Callable:
     return func
 
 funcs = {var.strip(): eval_f(f.strip()) for var, f in map(lambda s: s.split(':'), args.funcs)}
+
+ylim_dict = {}
+for item in args.ylim:
+    var, mn, mx = item.split(':')
+    ylim_dict[var] = (float(mn), float(mx))
 
 def split(N):
     for n in range(isqrt(N), 0, -1):
@@ -166,10 +175,19 @@ for var, ax in zip(vars, axs.flat):
     elif not sim_legend_exists:
         ax.legend()
         sim_legend_exists = True
+    if isinstance(var, list):
+        for v in var:
+            if v in ylim_dict:
+                ax.set_ylim(ylim_dict[v])
+    if var in ylim_dict:
+        ax.set_ylim(ylim_dict[var])
 
 if args.xlog:
     for ax in axs.flat:
         ax.set_xscale('log')
+if args.xlim is not None:
+    for ax in axs.flat:
+        ax.set_xlim(args.xlim)
 
 plt.tight_layout()
 plt.savefig(args.outputpath, dpi=200, bbox_inches='tight')
