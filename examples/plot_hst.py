@@ -179,7 +179,7 @@ for var, ax in zip(vars, axs.flat):
         for v in var:
             if v in ylim_dict:
                 ax.set_ylim(ylim_dict[v])
-    if var in ylim_dict:
+    elif var in ylim_dict:
         ax.set_ylim(ylim_dict[var])
 
 if args.xlog:

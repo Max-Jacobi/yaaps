@@ -54,6 +54,9 @@ class Simulation:
     problem_id: str
     input: Input
     name: str
+    color: None | str # optional field for plotting
+    linestyle: None | str # optional field for plotting
+    nice_name: None | str # optional field for plotting
 
     def __init__(
         self,
@@ -268,7 +271,8 @@ def _straighten(data: dict) -> dict:
         dsort = data['time']
     else:
         return data
-    _, isort = np.unique(dsort, return_index=True)
+    _, isort = np.unique(dsort[::-1], return_index=True)
+    isort = len(dsort) - 1 - isort
     return {k: np.atleast_1d(dd)[isort] for k, dd in data.items()}
 
 def _read_ascii(path: str) -> dict:
