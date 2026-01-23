@@ -869,9 +869,9 @@ class StreamPlot(Plot):
         self.x_grid, self.y_grid = self._create_grid(bounds, N_points)
         self.converted_x_grid = self.formatter.convert_coordinate(data.sampling[0], self.x_grid)
         self.converted_y_grid = self.formatter.convert_coordinate(data.sampling[1], self.y_grid)
-        self.grid = np.stack(np.meshgrid(self.x_grid, self.y_grid, indexing='ij'), axis=-1)
-        u_grid = np.zeros((len(self.x_grid), len(self.y_grid)))
-        v_grid = np.zeros((len(self.x_grid), len(self.y_grid)))
+        self.grid = np.stack(np.meshgrid(self.x_grid, self.y_grid), axis=-1)
+        u_grid = np.zeros((len(self.y_grid), len(self.x_grid)))
+        v_grid = np.zeros((len(self.y_grid), len(self.x_grid)))
         self.stream = self.ax.streamplot(self.converted_x_grid, self.converted_y_grid,
                                          u_grid, v_grid, **self.kwargs)
 

@@ -9,6 +9,14 @@ import yaaps as ya
 
 from typing import Callable
 
+auto_log_keys = [
+    'mass',
+    'max_sc_nG_00', 'max_sc_nG_01', 'max_sc_nG_02',
+    'max_sc_E_00', 'max_sc_E_01', 'max_sc_E_02',
+    'max_sc_n_00', 'max_sc_n_01', 'max_sc_n_02',
+    'max_sc_J_00', 'max_sc_J_01', 'max_sc_J_02',
+    ]
+
 ap = argparse.ArgumentParser("Create a 2D grid plot using yaaps and save it as png")
 
 ap.add_argument('vars', type=str, help="Variables to plot. "
@@ -41,6 +49,8 @@ ap.add_argument('--xlog', type=bool, default=False,
                 help="Log scale the xaxis")
 ap.add_argument('--xlim', type=float, nargs=2, default=None,
                 help="Limits for x axis")
+ap.add_argument('--no-auto-log', action='store_true',
+                help="Disable automatic log scaling for y axis")
 
 args = ap.parse_args()
 
@@ -160,7 +170,7 @@ for var, ax in zip(vars, axs.flat):
     if isinstance(var, list):
         ax.set_ylabel(" ".join(var))
         for v in var:
-            if v in args.ylog:
+            if v in args.ylog + (auto_log_keys if not args.no_auto_log else []):
                 ax.set_yscale('log')
                 break
     else:

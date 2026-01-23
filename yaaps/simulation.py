@@ -54,9 +54,7 @@ class Simulation:
     problem_id: str
     input: Input
     name: str
-    color: None | str # optional field for plotting
-    linestyle: None | str # optional field for plotting
-    nice_name: None | str # optional field for plotting
+    md: dict
 
     def __init__(
         self,
@@ -82,6 +80,7 @@ class Simulation:
         else:
             self.input = Input(input_path)
 
+        self.md = {}
 
         rl  = 0
         if 'trackers_extrema/ref_level' in self.input:
@@ -271,6 +270,8 @@ def _straighten(data: dict) -> dict:
         dsort = data['time']
     else:
         return data
+    if len(dsort) == 0:
+        return {k: np.array([]) for k in data.keys()}
     _, isort = np.unique(dsort[::-1], return_index=True)
     isort = len(dsort) - 1 - isort
     return {k: np.atleast_1d(dd)[isort] for k, dd in data.items()}
