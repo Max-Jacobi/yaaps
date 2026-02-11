@@ -264,6 +264,7 @@ def _straighten(data: dict) -> dict:
     Returns:
         Dictionary with arrays sorted and deduplicated by the sort key.
     """
+    data = {k: np.atleast_1d(v) for k, v in data.items()}
     if 'iter' in data:
         dsort = data['iter']
     elif 'time' in data:
@@ -271,10 +272,10 @@ def _straighten(data: dict) -> dict:
     else:
         return data
     if len(dsort) == 0:
-        return {k: np.array([]) for k in data.keys()}
+        return data
     _, isort = np.unique(dsort[::-1], return_index=True)
     isort = len(dsort) - 1 - isort
-    return {k: np.atleast_1d(dd)[isort] for k, dd in data.items()}
+    return {k: dd[isort] for k, dd in data.items()}
 
 def _read_ascii(path: str) -> dict:
     """

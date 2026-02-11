@@ -29,6 +29,9 @@ import re
 # Keys can be strings (matched by endswith) or compiled regex patterns.
 units: dict[str | re.Pattern, tuple[float, str]] = {
     "rho": (6.175828477586656e+17, " [g cm$^{-3}$]"),
+    "aux.e": (6.175828477586656e+17, " [g cm$^{-3}$]"),
+    "aux.T": (1.0, " [MeV]"),
+    "aux.s": (1.0, r" [$k_{\mathrm{B}}$]"),
     "eps": (8.9875517873681764e+20, " [erg g$^{-1}$]"),
     "P": (5.550725674743868e+38, " [erg cm$^{-3}$]"),
     # "mass": (1.988409870967742e+33, " [g]"),
@@ -156,6 +159,8 @@ class FieldLabels:
             "hydro.prim.rho": r"$\rho$",
             "hydro.prim.p": r"$P$",
             "hydro.aux.s": r"$s$",
+            "hydro.aux.T": r"$T$",
+            "hydro.aux.e": r"$e$",
             # Passive scalars
             "ye": r"$Y_e$",
             "passive_scalar.r_0": r"$Y_e$",

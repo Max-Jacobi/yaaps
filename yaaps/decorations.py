@@ -30,6 +30,8 @@ _color_kwargs_default: dict[str, Callable[[dict], dict]] = {
     "hydro.prim.rho": _update_defaults(cmap='magma', norm='log'),
     "passive_scalar.r_0": _update_defaults(cmap='coolwarm_r', norm='lin'), # ye
     "hydro.aux.u_t": _update_defaults(cmap='RdBu', norm='lin', vmin=-1.1, vmax=-.9),
+    "hydro.aux.T": _update_defaults(cmap='hot', norm='lin'),
+    "hydro.aux.e": _update_defaults(cmap='plasma', norm='log'),
     "hydro.aux.hu_t": _update_defaults(cmap='managua', norm='lin', vmin=-1.1, vmax=-.9),
     "M1.lab.sc_E_00": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
     "M1.lab.sc_E_01": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
@@ -43,6 +45,9 @@ _color_kwargs_default: dict[str, Callable[[dict], dict]] = {
     "M1.rad.sc_n_00": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
     "M1.rad.sc_n_01": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
     "M1.rad.sc_n_02": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
+    "geom.con.H": _update_defaults(cmap='cubehelix', norm='log'),
+    "geom.con.M": _update_defaults(cmap='cubehelix', norm='log'),
+    "geom.con.C": _update_defaults(cmap='cubehelix', norm='log'),
     "default": _update_defaults(cmap='viridis', norm='lin'),
 }
 
