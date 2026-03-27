@@ -42,6 +42,7 @@ units: dict[str | re.Pattern, tuple[float, str]] = {
     "y": (1.4766250382504018, " [km]"),
     "z": (1.4766250382504018, " [km]"),
     "mass": (1.0, r" [$M_\odot$]"),
+    "Omega": (203025.44670054692, " [s$^{-1}$]"),
     re.compile(r"nu\d_lum"): (3.628132869648639e+59, " [erg s$^{-1}$]"),
     re.compile(r"nu\d_en"): (1.11545707207968e+60, " [MeV]"),
     re.compile("m_ej"): (1.0, r" [$M_\odot$]"),

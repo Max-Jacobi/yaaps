@@ -96,6 +96,7 @@ class Plot(ABC):
 
     ax: Axes
     formatter: PlotFormatterBase
+    t_off = 0.0
 
     def __init__(self, ax: (Axes | None), formatter: PlotFormatterBase | str | None = None):
         """
@@ -270,7 +271,8 @@ class MeshBlockPlot(Plot):
             List containing the PatchCollection artist.
         """
 
-        xyz, *_ = self.data.load_data(time) # should be lru_cached
+
+        xyz, *_ = self.data.load_data(time+self.t_off) # should be lru_cached
         if self.data.sampling[0].endswith('v'):
             coll = [Rectangle(
                 (1.5*x1[0] - 0.5*x1[1], 1.5*x2[0] - 0.5*x2[1]),
@@ -382,7 +384,7 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
             List of QuadMesh artists created.
         """
         self.clean()
-        xyz, data, actual_time = self.data.load_data(time)
+        xyz, data, actual_time = self.data.load_data(time+self.t_off)
 
         # Apply data transformation if specified
         if self.func is not None:
@@ -398,7 +400,7 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
         self.kwargs = update_color_kwargs(self.data.var, self.kwargs, data=data)
 
         # Set title using formatter
-        self.ax.set_title(self.formatter.format_title(self.data.var, actual_time))
+        self.ax.set_title(self.formatter.format_title(self.data.var, actual_time-self.t_off))
 
         for fd, xx, yy in zip(data, *converted_xyz):
             coords = np.meshgrid(xx, yy, indexing='ij')
@@ -553,9 +555,12 @@ class NativeColorPlot(ColorPlot[Native]):
         sim: "Simulation",
         var: str,
         sampling: Sampling = ('x1v', 'x2v'),
+        t_merg_offset: bool = True,
         **kwargs
         ):
         data = Native(sim, var, sampling)
+        if "t_merg" in sim.md and t_merg_offset:
+            self.t_off = sim.md["t_merg"]
         super().__init__(data=data, **kwargs)
 
 
@@ -589,9 +594,12 @@ class DerivedColorPlot(ColorPlot[Derived]):
         depends: tuple[str, ...],
         definition: Callable,
         sampling: Sampling = ('x1v', 'x2v'),
+        t_merg_offset: bool = True,
         **kwargs
         ):
         data = Derived(sim, var, depends, definition, sampling)
+        if "t_merg" in sim.md and t_merg_offset:
+            self.t_off = sim.md["t_merg"]
         super().__init__(data=data, **kwargs)
 
 
@@ -775,7 +783,7 @@ class QuiverPlot(Plot):
         """
         # Set title using formatter
         self.ax.set_title(self.formatter.format_title(self.data.var, time))
-        u_grid, v_grid = self.data.interp(self.grid, time=time)
+        u_grid, v_grid = self.data.interp(self.grid, time=time+self.t_off)
         if self.func is not None:
             u_grid, v_grid = self.func(u_grid, v_grid)
         self.quiv.set_UVC(u_grid, v_grid)
@@ -861,6 +869,7 @@ class StreamPlot(Plot):
         N_points: int | tuple[int, int] = 20,
         ax: (Axes | None) = None,
         formatter: PlotFormatterBase | str | None = None,
+        t_merg_offset: bool = True,
         **kwargs,
     ):
         super().__init__(ax=ax, formatter=formatter)
@@ -874,6 +883,9 @@ class StreamPlot(Plot):
         v_grid = np.zeros((len(self.y_grid), len(self.x_grid)))
         self.stream = self.ax.streamplot(self.converted_x_grid, self.converted_y_grid,
                                          u_grid, v_grid, **self.kwargs)
+        sim = data.sim
+        if "t_merg" in sim.md and t_merg_offset:
+            self.t_off = sim.md["t_merg"]
 
     def plot(self, time: float) -> list[Artist]:
         """
@@ -888,7 +900,7 @@ class StreamPlot(Plot):
         self.clean()
         # Set title using formatter
         self.ax.set_title(self.formatter.format_title(self.data.var, time))
-        u_grid, v_grid = self.data.interp(self.grid, time=time)
+        u_grid, v_grid = self.data.interp(self.grid, time=time+self.t_off)
         self.stream = self.ax.streamplot(self.converted_x_grid, self.converted_y_grid,
                                          u_grid, v_grid, **self.kwargs)
         return [self.stream.lines, self.stream.arrows]
@@ -932,7 +944,7 @@ def animate(
     post_draw: (Callable[..., Sequence[Artist]] | None) = None,
     pbar: bool = True,
     **kwargs,
-):
+) -> FuncAnimation:
     """
     Create an animation from a sequence of plots over time.
 
@@ -1031,7 +1043,11 @@ def save_frames(
         i, t = it
         artists = []
         for plot in plots:
-            artists.extend(plot.plot(t))
+            ret = plot.plot(t)
+            if isinstance(ret, list):
+                artists.extend(ret)
+            elif ret is not None:
+                artists.append(ret)
 
         if post_draw is not None:
             extra = post_draw(t)
@@ -1168,7 +1184,7 @@ class ContourPlot[DataType: MeshData](Plot, ABC):
         """
         self.clean()
 
-        data = self.data.interp(self.grid, time=time)
+        data = self.data.interp(self.grid, time=time+self.t_off)
         data = self.formatter.convert_data(self.data.var, data)
         *_, actual_time = self.data.load_data(time)
 
@@ -1176,7 +1192,7 @@ class ContourPlot[DataType: MeshData](Plot, ABC):
         if self.kwargs.get('colors', None) is not None:
             self.kwargs.pop('cmap', None)
 
-        self.ax.set_title(self.formatter.format_title(self.data.var, actual_time))
+        self.ax.set_title(self.formatter.format_title(self.data.var, actual_time-self.t_off))
         coords = np.meshgrid(self.converted_x_grid, self.converted_y_grid, indexing='ij')
 
         self.contours = self.ax.contour(*coords, data, **self.kwargs)
@@ -1223,9 +1239,12 @@ class NativeContourPlot(ContourPlot[Native]):
         sampling: Sampling = ('x1v', 'x2v'),
         bounds: float | tuple[float, float, float, float] = 10.0,
         N_points: int | tuple[int, int] = 200,
+        t_merg_offset: bool = True,
         **kwargs
         ):
         data = Native(sim, var, sampling)
+        if "t_merg" in sim.md and t_merg_offset:
+            self.t_off = sim.md["t_merg"]
         super().__init__(data=data, bounds=bounds,
                          N_points=N_points, **kwargs)
 
@@ -1265,8 +1284,11 @@ class DerivedContourPlot(ContourPlot[Derived]):
         sampling: Sampling = ('x1v', 'x2v'),
         bounds: float | tuple[float, float, float, float] = 10.0,
         N_points: int | tuple[int, int] = 200,
+        t_merg_offset: bool = True,
         **kwargs
         ):
         data = Derived(sim, var, depends, definition, sampling)
+        if "t_merg" in sim.md and t_merg_offset:
+            self.t_off = sim.md["t_merg"]
         super().__init__(data=data, bounds=bounds,
                          N_points=N_points, **kwargs)
