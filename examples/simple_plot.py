@@ -4,6 +4,7 @@ import tempfile
 import argparse
 import matplotlib.pyplot as plt
 import yaaps as ya
+import yaaps.decorations as yd
 
 # for -f argument
 import numpy as np
@@ -40,12 +41,15 @@ ap.add_argument('-p', '--paper-format', action='store_true',
 args = ap.parse_args()
 
 sim = ya.Simulation(args.simdir)
+varnames = yd.reverse_var_alias
 
 if args.var is None:
     av_v = sorted(set(vv for vv, *_ in sim.scrape.debug_data_keys().keys()))
     print("Available vars:")
+    max_len = max(len(vv) for vv in av_v)
     for vv in av_v:
-        print(f"  {vv}")
+        if varnames.get(vv): print(f"  {vv.ljust(max_len)} -> {varnames[vv]}")
+        else: print(f"  {vv}")
     exit(0)
 
 if args.outputpath is None:

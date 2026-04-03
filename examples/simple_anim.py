@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 
 import yaaps as ya
 import yaaps.plot2D as yp
+import yaaps.decorations as yd
 
 ap = argparse.ArgumentParser("Make an animation and save the frames as png")
 
@@ -42,12 +43,15 @@ ap.add_argument('-p', '--paper-format', action='store_true',
 args = ap.parse_args()
 
 sim = ya.Simulation(args.simdir)
+varnames = yd.reverse_var_alias
 
 if args.var is None:
     av_v = sorted(set(vv for vv, *_ in sim.scrape.debug_data_keys().keys()))
     print("Available vars:")
+    max_len = max(len(vv) for vv in av_v)
     for vv in av_v:
-        print(f"  {vv}")
+        if varnames.get(vv): print(f"  {vv.ljust(max_len)} -> {varnames[vv]}")
+        else: print(f"  {vv}")
     exit(0)
 
 func = eval(args.func)

@@ -54,8 +54,12 @@ _color_kwargs_default: dict[str, Callable[[dict], dict]] = {
 var_alias: dict[str, str] = {
     "rho": "hydro.prim.rho",
     "p": "hydro.prim.p",
-    "ye": "passive_scalar.r_0",
     "s": "hydro.aux.s",
+    "T": "hydro.aux.T",
+    "e": "hydro.aux.e",
+    "W": "hydro.aux.W",
+    "cs2": "hydro.aux.cs2",
+    "ye": "passive_scalar.r_0",
     "util_x": "hydro.prim.util_u_1",
     "util_y": "hydro.prim.util_u_2",
     "util_z": "hydro.prim.util_u_3",
@@ -78,6 +82,8 @@ var_alias: dict[str, str] = {
     "m1_n_a": "M1.rad.sc_n_01",
     "m1_n_x": "M1.rad.sc_n_02",
 }
+
+reverse_var_alias = {v: k for k, v in var_alias.items()}
 
 def update_color_kwargs(var: str, kwargs: dict, data: np.ndarray) -> dict:
     """
