@@ -109,14 +109,16 @@ frames = yp.save_frames(
 output_mp4 = os.path.join(output_dir, "animation.mp4")
 subprocess.run([
     "ffmpeg",
-    "-y",                   # overwrite if exists
+    "-y",                       # overwrite if exists
     "-framerate", args.fps,
     "-i", os.path.join(output_dir, "frame_%04d.png"),
-    "-pix_fmt", "yuv420p",
-    "-crf", "18",           # quality (lower = better, 18–23 typical)
+    "-c:v", "libx264",          # specify H.264 codec (e.g. zulip compatible)
+    "-pix_fmt", "yuv420p",      # compatible pixel format
+    "-crf", "18",
+    "-movflags", "+faststart",  # important for web playback
     output_mp4,
 ], check=True,
-stderr=subprocess.DEVNULL,
-stdout=subprocess.DEVNULL)  # suppress standard output
+stderr=subprocess.DEVNULL,      # suppress error messages
+stdout=subprocess.DEVNULL)      # suppress standard output
 
 plt.close()

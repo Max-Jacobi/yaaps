@@ -20,7 +20,7 @@ scipy
 h5py
 matplotlib
 tqdm
-simtroller
+ffmpeg (with enabled gpl)
 ```
 
 Clone:
@@ -55,6 +55,11 @@ Run the script with
 ```
 source analyze.sh
 ```
+Run 
+```
+source analyze.sh -h
+```
+for usage and more info.
 
 The script [examples/plot_vars.sh](./examples/plot_vars.sh) provides a working example to produce animations and plots from any output file of the simulation.
 To run the script, first copy it or link it in the `/path/to/simdir/combine` folder, and then
