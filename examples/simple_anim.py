@@ -1,7 +1,8 @@
 import argparse
-import sys
+import sys, os
 import numpy as np
 import matplotlib.pyplot as plt
+import subprocess
 
 import yaaps as ya
 import yaaps.plot2D as yp
@@ -39,6 +40,8 @@ ap.add_argument('--vmax', type=float, default=None,
                 help="Maximum of the colorscale")
 ap.add_argument('-p', '--paper-format', action='store_true',
                 help="Use paper-ready and units format for labels")
+ap.add_argument('--fps', type=str, default="30",
+                help="Number of fps for the mp4 output")
 
 args = ap.parse_args()
 
@@ -93,13 +96,27 @@ if args.time_max is not None:
     times = times[times<=args.time_max]
 times = times[::args.time_every]
 
+output_dir=f"{args.outputpath}/{args.var}_{args.sampling}"
 frames = yp.save_frames(
         times=times,
         fig=fig,
         plots=[plot],
-        output_dir=f"{args.outputpath}/{args.var}_{args.sampling}",
+        output_dir=output_dir,
         prefix=f"frame_",
         dpi=300,
         )
+
+output_mp4 = os.path.join(output_dir, "animation.mp4")
+subprocess.run([
+    "ffmpeg",
+    "-y",                   # overwrite if exists
+    "-framerate", args.fps,
+    "-i", os.path.join(output_dir, "frame_%04d.png"),
+    "-pix_fmt", "yuv420p",
+    "-crf", "18",           # quality (lower = better, 18–23 typical)
+    output_mp4,
+], check=True,
+stderr=subprocess.DEVNULL,
+stdout=subprocess.DEVNULL)  # suppress standard output
 
 plt.close()
