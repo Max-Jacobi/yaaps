@@ -40,7 +40,7 @@ ap.add_argument('--vmax', type=float, default=None,
                 help="Maximum of the colorscale")
 ap.add_argument('-p', '--paper-format', action='store_true',
                 help="Use paper-ready and units format for labels")
-ap.add_argument('--fps', type=str, default="30",
+ap.add_argument('--fps', type=str, default="2",
                 help="Number of fps for the mp4 output")
 
 args = ap.parse_args()

@@ -4,10 +4,11 @@ source ${HOME}/envs/conda.start
 
 ######################## parse arguments ########################
 usage() {
-    echo 'Usage: $(basename "$0") [-h] [-H] [-V] [-p] [-t] [var2 ...] [--args "extra-args"] -v <var1>'
+    echo 'Usage: $(basename "$0") [-h] [-H] [-V] [-b <boundary>] [-p] [-t] [--args "extra-args"] -v <var1> [var2 ...]'
     echo " -h       Help"
     echo " -H       Show help message from the plot script and exit [optional]"
     echo " -V       Show list of available vars and exit [optional]"
+    echo " -b       Boundary of the plot [optional]"
     echo " -p       Do a single plot instead of an animation [optional]"
     echo " -t       Time for the single plot [optional]"
     echo " --args   Extra arguments for the plotting script [optional]"
@@ -16,6 +17,7 @@ usage() {
 
 show_help_from_plot=false
 do_list_vars=false
+boundary=""
 do_animate=true
 pyexec=simple_anim.py
 time=10
@@ -35,6 +37,11 @@ while [[ $# -gt 0 ]]; do
             ;;
         -V)
             do_list_vars=true
+            shift
+            ;;
+        -b)
+            shift
+            boundary="--boundary $1"
             shift
             ;;
         -p)
@@ -86,8 +93,6 @@ fi
 dir_base=$(dirname "$(pwd)")
 # output directory for images: structure automatically created if missing
 dir_out=$(pwd)/analysis
-# sim tagname
-simtag=$(basename "$(pwd)")
 # path to directory containing *.athdf
 dir_data=$(pwd)
 
@@ -106,6 +111,7 @@ else
             --simdir ${dir_data}    \
             --outputpath ${dir_out} \
             --sampling ${plane}     \
+            $boundary               \
             ${extra_args[@]}
         "
         echo
