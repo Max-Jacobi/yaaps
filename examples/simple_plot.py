@@ -10,7 +10,8 @@ import numpy as np
 
 ap = argparse.ArgumentParser("Create a 2D grid plot using yaaps and save it as png")
 
-ap.add_argument('var', type=str, help="Variable to plot")
+ap.add_argument('var', type=str, nargs='?', default=None,
+                help="Variable to plot")
 ap.add_argument('-o','--outputpath', type=str, default=None,
                 help="Path to save at")
 ap.add_argument('-t','--time', type=float, default=1e5,
@@ -36,17 +37,16 @@ ap.add_argument('--vmax', type=float, default=None,
 ap.add_argument('-p', '--paper-format', action='store_true',
                 help="Use paper-ready and units format for labels")
 
-if len(sys.argv) == 1:
-    sim = ya.Simulation("active")
-    av_v = sorted(list(set(vv for vv, *_ in sim.scrape.debug_data_keys().keys())))
+args = ap.parse_args()
+
+sim = ya.Simulation(args.simdir)
+
+if args.var is None:
+    av_v = sorted(set(vv for vv, *_ in sim.scrape.debug_data_keys().keys()))
     print("Available vars:")
     for vv in av_v:
         print(f"  {vv}")
     exit(0)
-
-args = ap.parse_args()
-
-sim = ya.Simulation(args.simdir)
 
 if args.outputpath is None:
     fd, args.outputpath = tempfile.mkstemp(suffix=".png")

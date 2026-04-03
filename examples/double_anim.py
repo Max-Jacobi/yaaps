@@ -8,7 +8,8 @@ import yaaps.plot2D as yp
 
 ap = argparse.ArgumentParser("Make an animation and save the frames as png")
 
-ap.add_argument('var', type=str, help="Variable to plot")
+ap.add_argument('var', type=str, nargs='?', default=None,
+                help="Variable to plot")
 ap.add_argument('-o','--outputpath', type=str, default=None,
                 help="Path to save at")
 ap.add_argument('-s1','--simdir_1', type=str,
@@ -40,17 +41,18 @@ ap.add_argument('--vmax', type=float, default=None,
 ap.add_argument('-p', '--paper-format', action='store_true',
                 help="Use paper-ready and units format for labels")
 
-if len(sys.argv) == 1:
-    sim = ya.Simulation("active")
-    av_v = sorted(list(set(vv for vv, *_ in sim.scrape.debug_data_keys().keys())))
-    print("Available vars:")
+args = ap.parse_args()
+
+sims = (ya.Simulation(args.simdir_1),
+        ya.Simulation(args.simdir_2))
+
+if args.var is None:
+    av_v = sorted(set(vv for vv, *_ in sims[0].scrape.debug_data_keys().keys()))
+    print("Available vars in sims[0]:")
     for vv in av_v:
         print(f"  {vv}")
     exit(0)
 
-args = ap.parse_args()
-sims = (ya.Simulation(args.simdir_1),
-        ya.Simulation(args.simdir_2))
 func = eval(args.func)
 
 fig, axs = plt.subplots(2, figsize=(6, 8), animated=True)
