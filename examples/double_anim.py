@@ -57,9 +57,10 @@ func = eval(args.func)
 
 fig, axs = plt.subplots(2, figsize=(6, 8), animated=True)
 
-for ax in axs:
-    ax.set_xlim(-args.boundary, args.boundary)
-    ax.set_ylim(-args.boundary, args.boundary)
+if (args.boundary is not None):
+    for ax in axs:
+        ax.set_xlim(-args.boundary, args.boundary)
+        ax.set_ylim(-args.boundary, args.boundary)
 
 kwargs = dict(
     var=args.var,

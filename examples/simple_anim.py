@@ -54,8 +54,9 @@ func = eval(args.func)
 
 fig, ax = plt.subplots(1, figsize=(6, 4), animated=True)
 
-ax.set_xlim(-args.boundary, args.boundary)
-ax.set_ylim(-args.boundary, args.boundary)
+if (args.boundary is not None):
+    ax.set_xlim(-args.boundary, args.boundary)
+    ax.set_ylim(-args.boundary, args.boundary)
 
 kwargs = dict(
     var=args.var,
