@@ -97,7 +97,7 @@ frames = yp.save_frames(
         times=times,
         fig=fig,
         plots=[plot],
-        output_dir=f"{args.var}_{args.sampling}",
+        output_dir=f"{args.outputpath}/{args.var}_{args.sampling}",
         prefix=f"frame_",
         dpi=300,
         )
