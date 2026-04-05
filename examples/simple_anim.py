@@ -1,14 +1,17 @@
 import argparse
-import sys
+import sys, os
 import numpy as np
 import matplotlib.pyplot as plt
+import subprocess
 
 import yaaps as ya
 import yaaps.plot2D as yp
+import yaaps.decorations as yd
 
 ap = argparse.ArgumentParser("Make an animation and save the frames as png")
 
-ap.add_argument('var', type=str, help="Variable to plot")
+ap.add_argument('var', type=str, nargs='?', default=None,
+                help="Variable to plot")
 ap.add_argument('-o','--outputpath', type=str, default=None,
                 help="Path to save at")
 ap.add_argument('-s','--simdir', type=str, default='active',
@@ -37,24 +40,30 @@ ap.add_argument('--vmax', type=float, default=None,
                 help="Maximum of the colorscale")
 ap.add_argument('-p', '--paper-format', action='store_true',
                 help="Use paper-ready and units format for labels")
-
-if len(sys.argv) == 1:
-    sim = ya.Simulation("active")
-    av_v = sorted(list(set(vv for vv, *_ in sim.scrape.debug_data_keys().keys())))
-    print("Available vars:")
-    for vv in av_v:
-        print(f"  {vv}")
-    exit(0)
+ap.add_argument('--fps', type=str, default="2",
+                help="Number of fps for the mp4 output")
 
 args = ap.parse_args()
 
 sim = ya.Simulation(args.simdir)
+varnames = yd.reverse_var_alias
+
+if args.var is None:
+    av_v = sorted(set(vv for vv, *_ in sim.scrape.debug_data_keys().keys()))
+    print("Available vars:")
+    max_len = max(len(vv) for vv in av_v)
+    for vv in av_v:
+        if varnames.get(vv): print(f"  {vv.ljust(max_len)} -> {varnames[vv]}")
+        else: print(f"  {vv}")
+    exit(0)
+
 func = eval(args.func)
 
 fig, ax = plt.subplots(1, figsize=(6, 4), animated=True)
 
-ax.set_xlim(-args.boundary, args.boundary)
-ax.set_ylim(-args.boundary, args.boundary)
+if (args.boundary is not None):
+    ax.set_xlim(-args.boundary, args.boundary)
+    ax.set_ylim(-args.boundary, args.boundary)
 
 kwargs = dict(
     var=args.var,
@@ -87,13 +96,29 @@ if args.time_max is not None:
     times = times[times<=args.time_max]
 times = times[::args.time_every]
 
+output_dir=f"{args.outputpath}/{args.var}_{args.sampling}"
 frames = yp.save_frames(
         times=times,
         fig=fig,
         plots=[plot],
-        output_dir=f"{args.var}_{args.sampling}",
+        output_dir=output_dir,
         prefix=f"frame_",
         dpi=300,
         )
+
+output_mp4 = os.path.join(output_dir, "animation.mp4")
+subprocess.run([
+    "ffmpeg",
+    "-y",                       # overwrite if exists
+    "-framerate", args.fps,
+    "-i", os.path.join(output_dir, "frame_%04d.png"),
+    "-c:v", "libx264",          # specify H.264 codec (e.g. zulip compatible)
+    "-pix_fmt", "yuv420p",      # compatible pixel format
+    "-crf", "18",
+    "-movflags", "+faststart",  # important for web playback
+    output_mp4,
+], check=True,
+stderr=subprocess.DEVNULL,      # suppress error messages
+stdout=subprocess.DEVNULL)      # suppress standard output
 
 plt.close()

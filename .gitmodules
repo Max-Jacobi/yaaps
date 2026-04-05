@@ -1,0 +1,6 @@
+[submodule "submodules/simtroller"]
+	path = submodules/simtroller
+	url = https://github.com/Max-Jacobi/simtroller
+[submodule "simtroller"]
+	path = simtroller
+	url = https://github.com/Max-Jacobi/simtroller
