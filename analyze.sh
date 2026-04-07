@@ -62,7 +62,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 ##############################################################
-######################## run analysis ########################
+######################## Run analysis ########################
 
 # path to directory containing all outputs
 dir_base=$(pwd)
@@ -70,6 +70,17 @@ dir_base=$(pwd)
 dir_comb=${dir_base}/combine
 # output directory for images: structure automatically created if missing
 dir_out=${dir_comb}/analysis
+
+################### Instruction for Ctrl+C ###################
+
+cleanup() {
+    echo
+    echo "Caught Ctrl+C or script exiting. Returning to base directory..."
+    cd "$dir_base" || return 1
+}
+trap cleanup SIGINT SIGTERM EXIT
+
+################### Combine restart folders ##################
 
 # update combined results folder
 combinepy="combine.py"
