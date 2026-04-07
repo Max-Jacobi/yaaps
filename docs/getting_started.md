@@ -6,7 +6,7 @@ This guide walks you through installing YAAPS, loading your first simulation, an
 
 ## Requirements
 
-- Python ≥ 3.10
+- Python ≥ 3.12
 - A GRAthena++ simulation output directory containing:
   - At least one `.inp` or `.par` parameter file
   - `.athdf` volume-data files (for 2D plots)
