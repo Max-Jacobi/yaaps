@@ -4,6 +4,8 @@ Postprocessing scripts for (GR)athena++
 
 ## Documentation
 
+➡ **[Getting Started](docs/getting_started.md)** — installation, first plot, and key concepts
+
 | Module | Description |
 |--------|-------------|
 | [Simulation](docs/simulation.md) | Main entry point — load data, create plots, access history/waveform/tracer/horizon files |
