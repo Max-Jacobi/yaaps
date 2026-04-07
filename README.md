@@ -46,7 +46,7 @@ to your `~/.bashrc`.
 Initialize your simulation directory with [batchtools](https://github.com/computationalrelativity/batchtools).
 Example with simulations for [grathena-runs-m1-a](https://github.com/computationalrelativity/grathena-runs-m1-a) projects:
 ```
-batchtools init --batch ${DIR_CR}/batchtools/master/templates/grathena/lrz-gcc/athena.sub --parfile ${DIR_CR}/grathena-runs-m1-a/master/inputs/<path/to/input.inp> --exe ${DIR_CR}/grathena-runs-m1-a/master/exec/<exe> --include ${DIR_REP}/yaaps/analyze.sh ${DIR_REP}/yaaps/examples/plot_vars.sh
+batchtools init --batch ${DIR_CR}/batchtools/master/templates/grathena/lrz-gcc/athena.sub --parfile ${DIR_CR}/grathena-runs-m1-a/master/inputs/<path/to/input.inp> --exe ${DIR_CR}/grathena-runs-m1-a/master/exec/<exe> --include ${DIR_REP}/yaaps/analyze.sh --include ${DIR_REP}/yaaps/examples/plot_vars.sh  --include ${DIR_REP}/yaaps/examples/plot_hst.py
 ln -s BATCH/include/analyze.sh .
 ```
 
@@ -76,6 +76,11 @@ Run
 source plot_vars.sh -h
 ```
 for usage and more info.
+
+The script [examples/plot_hst.py](./examples/plot_hst.py) plots the history of a series of selected scalar variables. To see the available scalar variables run
+```
+python plot_hst.py -s /path/to/output/folder -l
+```
 
 ### Other scripts
 

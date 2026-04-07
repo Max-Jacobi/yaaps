@@ -4,20 +4,27 @@ source ${HOME}/envs/conda.start
 
 ######################## parse arguments ########################
 usage() {
-    echo 'Usage: $(basename "$0") [-h] [-V] [-b <boundary>] [-v <var1> ...]'
+    echo 'Usage: $(basename "$0") [-h] [-V] [-b <boundary>] [--fps <fps>] [-v <var1> ...]'
     echo " -h       Help"
     echo " -V       Show list of available vars and exit [optional]"
     echo " -b       Boundary of the plot [optional]"
+    echo " --fps    Number of fps for the mp4 output [optional]"
     echo " -v       List of variables to plot [optional]"
 }
 
-do_list_vars=false
+vars1D="max_rho max_T "                             # hydro
+vars1D+="min_alpha C-norm2 "                        # GR evolution
+vars1D+="max_B2 div_B "                             # magnetic fields
+vars1D+="max_sc_nG_00,max_sc_nG_01,max_sc_nG_02 "   # neutrinos number densities
+vars1D+="max_sc_E_00,max_sc_E_01,max_sc_E_02"       # neutrinos energy densities
+
 boundary=""
+fps=""
+planes=("xy" "xz")
 vars2D=("rho" "ye")
 vars2D+=("B_x" "B_y" "B_z")             # magnetic fields
 #vars2D+=("m1_n_e" "m1_n_ae" "m1_n_x")   # neutrinos number densities #FIXME
 #vars2D+=("m1_J_e" "m1_J_ae" "m1_J_x")   # neutrinos energy densities #FIXME
-planes=("xy" "xz")
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -25,13 +32,14 @@ while [[ $# -gt 0 ]]; do
             usage
             return 0
             ;;
-        -V)
-            do_list_vars=true
-            shift
-            ;;
         -b)
             shift
             boundary="--boundary $1"
+            shift
+            ;;
+        --fps)
+            shift
+            fps="--fps $1"
             shift
             ;;
         -v)
@@ -82,9 +90,12 @@ echo "Running 1D diagnosis plots"
 
 cd ${DIR_REP}/yaaps/examples
 
-echo "======================================================="
-echo "================= NOT YET IMPLEMENTED ================="
-echo "======================================================="
+exec="plot_hst.py           \
+    ${vars1D}               \
+    --simdir ${dir_comb}    \
+    --outputpath ${dir_out}
+"
+python ${exec}
 
 cd ${dir_base}
 
@@ -108,7 +119,7 @@ for var in "${vars2D[@]}"; do
             --simdir ${dir_comb}    \
             --outputpath ${dir_out} \
             --sampling ${plane}     \
-            $boundary
+            $boundary $fps
         "
         python ${exec}
 

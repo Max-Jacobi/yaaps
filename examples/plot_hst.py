@@ -22,13 +22,13 @@ ap = argparse.ArgumentParser("Create a 2D grid plot using yaaps and save it as p
 ap.add_argument('vars', type=str, help="Variables to plot. "
                 "Optionally the source can be specified as hor/var, tra/var, wav/var to avoid ambiguity. "
                 "Multiple variables can be plotted in the same subplot by separating them with commas.",
-                nargs='+', default=["max_rho"])
+                nargs='*', default=["max_rho"])
 ap.add_argument('-o','--outputpath', type=str, default=None,
                 help="Path to save at")
-ap.add_argument('-t','--time', type=float, default=1e5,
-                help="Time to plot at")
 ap.add_argument('-s','--simdir', type=str, default=['active'], nargs='+',
                 help="Directories to look for athdf files in")
+ap.add_argument('-l','--listvars', action="store_true",
+                help="List the available variables and exit")
 ap.add_argument('-c','--colors', type=str, default=None, nargs='+',
                 help="Colors to plot the simulations in")
 ap.add_argument('-v','--xvar', type=str, default="time",
@@ -61,13 +61,17 @@ for sim in args.simdir:
     except FileNotFoundError:
         print(f"No parfile in {sim}, skipping", file=sys.stderr)
 
+if args.listvars:
+    print("Available vars in sims[0]:")
+    print(sims[0].hst.keys())
+    exit(0)
+
 vars = []
 for v in args.vars:
     if ',' in v:
         vars.append(v.split(','))
     else:
         vars.append(v)
-
 
 if args.outputpath is None:
     fd, args.outputpath = tempfile.mkstemp(suffix=".png")
@@ -200,5 +204,4 @@ if args.xlim is not None:
         ax.set_xlim(args.xlim)
 
 plt.tight_layout()
-plt.savefig(args.outputpath, dpi=200, bbox_inches='tight')
-print(args.outputpath)
+plt.savefig(args.outputpath+"/history.png", dpi=200, bbox_inches='tight')
