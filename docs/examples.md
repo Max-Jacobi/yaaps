@@ -75,6 +75,33 @@ python examples/double_anim.py rho -s1 /path/to/sim_A -s2 /path/to/sim_B -b 200
 
 ---
 
+## `parallel_anim.py` — History / Time-Series Plots
+
+Renders a range of simulation snapshots to individual PNG files using
+multiple worker processes:
+
+```bash
+python examples/parallel_anim.py rho \
+    -s /path/to/sim \
+    -o frames/ \
+    -w 8 \
+    -n log --vmin 1e10 --vmax 1e15
+```
+
+Each worker loads the simulation once at startup and then renders
+its assigned frames independently.  Frames can afterwards be assembled
+into a video with, e.g., `ffmpeg`:
+
+```
+ffmpeg -framerate 24 -i frames/frame_%06d.png -c:v libx264 out.mp4
+```
+
+**Arguments**
+
+Same as simple_anim.py
+
+---
+
 ## `plot_hst.py` — History / Time-Series Plots
 
 Plots columns from `.hst`, tracer (`tra`), waveform (`wav`), or horizon (`hor`) files against time for one or more simulations.
