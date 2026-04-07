@@ -76,6 +76,7 @@ for v in args.vars:
 if args.outputpath is None:
     fd, args.outputpath = tempfile.mkstemp(suffix=".png")
     os.close(fd)
+os.makedirs(args.outputpath, exist_ok=True)
 
 if args.colors is None:
     args.colors = [f"C{ii}" for ii, _ in enumerate(sims)]
