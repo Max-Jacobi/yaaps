@@ -12,8 +12,9 @@ usage() {
     echo " -v       List of variables to plot [optional]"
 }
 
-vars1D="max_rho max_T "                             # hydro
-vars1D+="min_alpha C-norm2 "                        # GR evolution
+vars1D="max_rho max_T tot-E "                       # hydro
+vars1D+="m_ej_bern "                                # ejecta
+vars1D+="min_alpha C-norm2 mass num_c2p_fail "      # GR evolution
 vars1D+="max_B2 div_B "                             # magnetic fields
 vars1D+="max_sc_nG_00,max_sc_nG_01,max_sc_nG_02 "   # neutrinos number densities
 vars1D+="max_sc_E_00,max_sc_E_01,max_sc_E_02"       # neutrinos energy densities
