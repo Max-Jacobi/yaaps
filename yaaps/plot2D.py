@@ -397,14 +397,14 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
             tuple(self.formatter.convert_coordinate(self.data.sampling[1], y) for y in xyz[1]),
         )
 
-        self.kwargs = update_color_kwargs(self.data.var, self.kwargs, data=data)
+        kwargs_frame = update_color_kwargs(self.data.var, self.kwargs, data=data)
 
         # Set title using formatter
         self.ax.set_title(self.formatter.format_title(self.data.var, actual_time-self.t_off))
 
         for fd, xx, yy in zip(data, *converted_xyz):
             coords = np.meshgrid(xx, yy, indexing='ij')
-            self.ims.append(self.ax.pcolormesh(*coords, fd, **self.kwargs))
+            self.ims.append(self.ax.pcolormesh(*coords, fd, **kwargs_frame))
         artists = self.ims.copy()
 
         if self.cbar:
@@ -1188,14 +1188,14 @@ class ContourPlot[DataType: MeshData](Plot, ABC):
         data = self.formatter.convert_data(self.data.var, data)
         *_, actual_time = self.data.load_data(time)
 
-        self.kwargs = update_color_kwargs(self.data.var, self.kwargs, data=data)
-        if self.kwargs.get('colors', None) is not None:
-            self.kwargs.pop('cmap', None)
+        kwargs_frame = update_color_kwargs(self.data.var, self.kwargs, data=data)
+        if kwargs_frame.get('colors', None) is not None:
+            kwargs_frame.pop('cmap', None)
 
         self.ax.set_title(self.formatter.format_title(self.data.var, actual_time-self.t_off))
         coords = np.meshgrid(self.converted_x_grid, self.converted_y_grid, indexing='ij')
 
-        self.contours = self.ax.contour(*coords, data, **self.kwargs)
+        self.contours = self.ax.contour(*coords, data, **kwargs_frame)
 
         if self.cbar:
             cbar_label = self.formatter.format_colorbar_label(self.data.var)

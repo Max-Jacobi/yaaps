@@ -23,8 +23,8 @@ fps=""
 planes=("xy" "xz")
 vars2D=("rho" "ye")
 vars2D+=("B_x" "B_y" "B_z")             # magnetic fields
-#vars2D+=("m1_n_e" "m1_n_ae" "m1_n_x")   # neutrinos number densities #FIXME
-#vars2D+=("m1_J_e" "m1_J_ae" "m1_J_x")   # neutrinos energy densities #FIXME
+vars2D+=("m1_n_e" "m1_n_ae" "m1_n_x")   # neutrinos number densities
+vars2D+=("m1_J_e" "m1_J_ae" "m1_J_x")   # neutrinos energy densities
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
