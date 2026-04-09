@@ -32,6 +32,7 @@ Assemble frames into a video afterwards, e.g. with ffmpeg::
 import os
 import argparse
 import multiprocessing
+import subprocess
 
 # Set the non-interactive Agg backend *before* any other matplotlib import.
 # This is required for headless (no-display) rendering and must happen at
@@ -150,7 +151,7 @@ if __name__ == '__main__':
                     help="Variable to plot")
     ap.add_argument('-s', '--simdir', type=str, default='active',
                     help="Directory to look for athdf files in")
-    ap.add_argument('-o', '--output-dir', type=str, default=None,
+    ap.add_argument('-o', '--output-dir', type=str, default=".",
                     help="Output directory for PNG frames "
                          "(default: VAR_SAMPLING)")
     ap.add_argument('-w', '--workers', type=int, default=None,
@@ -182,9 +183,13 @@ if __name__ == '__main__':
                     help="Use paper-ready and units format for labels")
     ap.add_argument('--dpi', type=int, default=300,
                     help="DPI for output images (default: 300)")
+    ap.add_argument('--fps', type=str, default="2",
+                    help="Number of fps for the mp4 output")
     ap.add_argument('--figsize', type=float, nargs=2, default=None,
                     metavar=('WIDTH', 'HEIGHT'),
                     help="Figure size in inches (e.g. --figsize 6 4)")
+    ap.add_argument('-v', '--verbose', action='store_true',
+                    help="Verbose execution")
 
     args = ap.parse_args()
 
@@ -216,7 +221,7 @@ if __name__ == '__main__':
         print("No frames in the specified time range.")
         raise SystemExit(1)
 
-    output_dir = args.output_dir or f"{args.var}_{args.sampling}"
+    output_dir = f"{args.output_dir}/{args.var}_{args.sampling}"
     os.makedirs(output_dir, exist_ok=True)
 
     # Pack all rendering options into a dict that the worker initializer
@@ -245,8 +250,9 @@ if __name__ == '__main__':
     n_workers = max(1, n_workers or 1)
 
     tasks = list(enumerate(times))
-    print(f"Rendering {len(tasks)} frames with {n_workers} workers "
-          f"into '{output_dir}'...")
+    if args.verbose:
+        print(f"Rendering {len(tasks)} frames with {n_workers} workers "
+              f"into '{output_dir}'...")
 
     # imap_unordered distributes tasks dynamically: as soon as a worker
     # finishes one frame it picks up the next pending one, keeping all
@@ -256,11 +262,30 @@ if __name__ == '__main__':
         initializer=_worker_init,
         initargs=(args.simdir, worker_cfg),
     ) as pool:
+        tqdmkwargs = {**dict(total=len(tasks), desc="Saving frames", ncols=0,
+                         unit="frame", leave=False)}
+        if args.verbose:
+            tqdmkwargs['leave']=True
         results = list(tqdm(
             pool.imap_unordered(_render_frame, tasks),
-            total=len(tasks),
-            desc='Frames',
-            unit='frame',
+            **tqdmkwargs
         ))
 
-    print(f"Done. {len(results)} frames saved to '{output_dir}'.")
+    output_mp4 = os.path.join(output_dir, "animation.mp4")
+    subprocess.run([
+        "ffmpeg",
+        "-y",                       # overwrite if exists
+        "-framerate", args.fps,
+        "-i", os.path.join(output_dir, "frame_%06d.png"),
+        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", # ensure H.264 codec-compatible frame sizes
+        "-c:v", "libx264",          # specify H.264 codec (e.g. zulip compatible)
+        "-pix_fmt", "yuv420p",      # compatible pixel format
+        "-crf", "18",
+        "-movflags", "+faststart",  # important for web playback
+        output_mp4,
+    ], check=True,
+    stderr=subprocess.DEVNULL,      # suppress error messages
+    stdout=subprocess.DEVNULL)      # suppress standard output
+
+    if args.verbose:
+        print(f"Done. {len(results)} frames saved to '{output_dir}'.")

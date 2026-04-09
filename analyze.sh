@@ -126,10 +126,10 @@ for var in "${vars2D[@]}"; do
 
     for plane in "${planes[@]}"; do
 
-        exec="simple_anim.py        \
+        exec="parallel_anim.py      \
             ${var}                  \
             --simdir ${dir_comb}    \
-            --outputpath ${dir_out} \
+            --output-dir ${dir_out} \
             --sampling ${plane}     \
             $boundary $fps
         "
