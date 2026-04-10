@@ -90,6 +90,8 @@ def eval_f(f: str) -> Callable:
         return lambda d: np.abs(d/d[0] - 1)
     if f == 'inv':
         return lambda d: 1/d
+    if f == 'abs':
+        return lambda d: np.abs(d)
 
     func = eval(f)
     if isinstance(func, (int, float)):
@@ -100,6 +102,7 @@ def eval_f(f: str) -> Callable:
     return func
 
 funcs = {var.strip(): eval_f(f.strip()) for var, f in map(lambda s: s.split(':'), args.funcs)}
+func_names = {var.strip(): f.strip() for var, f in map(lambda s: s.split(':'), args.funcs)}
 
 ylim_dict = {}
 for item in args.ylim:
@@ -173,13 +176,23 @@ for var, ax in zip(vars, axs.flat):
     ax.set_xlabel(args.xvar)
 
     if isinstance(var, list):
-        ax.set_ylabel(" ".join(var))
+        ylabel = " ".join(var)
+        for v in var:
+            key = v
+            if key in funcs:
+                func_name = func_names.get(key, None)
+                if func_name: ylabel = ylabel.replace(v, f"{func_name}({v})")
+        ax.set_ylabel(ylabel)
         for v in var:
             if v in args.ylog + (auto_log_keys if not args.no_auto_log else []):
                 ax.set_yscale('log')
                 break
     else:
-        ax.set_ylabel(var)
+        ylabel = var
+        if var in funcs:
+            func_name = func_names.get(var, None)
+            if func_name: ylabel = f"{func_name}({var})"
+        ax.set_ylabel(ylabel)
         if var in args.ylog:
             ax.set_yscale('log')
 

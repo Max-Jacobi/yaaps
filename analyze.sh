@@ -105,7 +105,9 @@ cd ${DIR_REP}/yaaps/examples
 exec="plot_hst.py           \
     ${vars1D}               \
     --simdir ${dir_comb}    \
-    --outputpath ${dir_out}
+    --outputpath ${dir_out} \
+    --funcs div_B:abs       \
+    --ylog div_B
 "
 python ${exec}
 
