@@ -22,13 +22,13 @@ ap = argparse.ArgumentParser("Create a 2D grid plot using yaaps and save it as p
 ap.add_argument('vars', type=str, help="Variables to plot. "
                 "Optionally the source can be specified as hor/var, tra/var, wav/var to avoid ambiguity. "
                 "Multiple variables can be plotted in the same subplot by separating them with commas.",
-                nargs='+', default=["max_rho"])
+                nargs='*', default=["max_rho"])
 ap.add_argument('-o','--outputpath', type=str, default=None,
                 help="Path to save at")
-ap.add_argument('-t','--time', type=float, default=1e5,
-                help="Time to plot at")
 ap.add_argument('-s','--simdir', type=str, default=['active'], nargs='+',
                 help="Directories to look for athdf files in")
+ap.add_argument('-l','--listvars', action="store_true",
+                help="List the available variables and exit")
 ap.add_argument('-c','--colors', type=str, default=None, nargs='+',
                 help="Colors to plot the simulations in")
 ap.add_argument('-v','--xvar', type=str, default="time",
@@ -61,6 +61,11 @@ for sim in args.simdir:
     except FileNotFoundError:
         print(f"No parfile in {sim}, skipping", file=sys.stderr)
 
+if args.listvars:
+    print("Available vars in sims[0]:")
+    print(sims[0].hst.keys())
+    exit(0)
+
 vars = []
 for v in args.vars:
     if ',' in v:
@@ -68,10 +73,10 @@ for v in args.vars:
     else:
         vars.append(v)
 
-
 if args.outputpath is None:
     fd, args.outputpath = tempfile.mkstemp(suffix=".png")
     os.close(fd)
+os.makedirs(args.outputpath, exist_ok=True)
 
 if args.colors is None:
     args.colors = [f"C{ii}" for ii, _ in enumerate(sims)]
@@ -85,6 +90,8 @@ def eval_f(f: str) -> Callable:
         return lambda d: np.abs(d/d[0] - 1)
     if f == 'inv':
         return lambda d: 1/d
+    if f == 'abs':
+        return lambda d: np.abs(d)
 
     func = eval(f)
     if isinstance(func, (int, float)):
@@ -95,6 +102,7 @@ def eval_f(f: str) -> Callable:
     return func
 
 funcs = {var.strip(): eval_f(f.strip()) for var, f in map(lambda s: s.split(':'), args.funcs)}
+func_names = {var.strip(): f.strip() for var, f in map(lambda s: s.split(':'), args.funcs)}
 
 ylim_dict = {}
 for item in args.ylim:
@@ -168,13 +176,23 @@ for var, ax in zip(vars, axs.flat):
     ax.set_xlabel(args.xvar)
 
     if isinstance(var, list):
-        ax.set_ylabel(" ".join(var))
+        ylabel = " ".join(var)
+        for v in var:
+            key = v
+            if key in funcs:
+                func_name = func_names.get(key, None)
+                if func_name: ylabel = ylabel.replace(v, f"{func_name}({v})")
+        ax.set_ylabel(ylabel)
         for v in var:
             if v in args.ylog + (auto_log_keys if not args.no_auto_log else []):
                 ax.set_yscale('log')
                 break
     else:
-        ax.set_ylabel(var)
+        ylabel = var
+        if var in funcs:
+            func_name = func_names.get(var, None)
+            if func_name: ylabel = f"{func_name}({var})"
+        ax.set_ylabel(ylabel)
         if var in args.ylog:
             ax.set_yscale('log')
 
@@ -200,5 +218,4 @@ if args.xlim is not None:
         ax.set_xlim(args.xlim)
 
 plt.tight_layout()
-plt.savefig(args.outputpath, dpi=200, bbox_inches='tight')
-print(args.outputpath)
+plt.savefig(args.outputpath+"/history.png", dpi=200, bbox_inches='tight')
