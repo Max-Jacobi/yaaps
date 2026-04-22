@@ -4,28 +4,32 @@ source ${HOME}/envs/conda.start
 
 ######################## parse arguments ########################
 usage() {
-    echo 'Usage: $(basename "$0") [-h] [-V] [-b <boundary>] [--fps <fps>] [-v <var1> ...]'
+    echo 'Usage: $(basename "$0") [-h] [-b <boundary>] [--fps <fps>] [-v <var1> ...]'
     echo " -h       Help"
-    echo " -V       Show list of available vars and exit [optional]"
     echo " -b       Boundary of the plot [optional]"
     echo " --fps    Number of fps for the mp4 output [optional]"
     echo " -v       List of variables to plot [optional]"
 }
 
-vars1D="max_rho max_T tot-E "                       # hydro
-vars1D+="m_ej_bern "                                # ejecta
-vars1D+="min_alpha C-norm2 mass num_c2p_fail "      # GR evolution
-vars1D+="max_B2 div_B "                             # magnetic fields
-vars1D+="max_sc_nG_00,max_sc_nG_01,max_sc_nG_02 "   # neutrinos number densities
-vars1D+="max_sc_E_00,max_sc_E_01,max_sc_E_02"       # neutrinos energy densities
+vars1D="max_rho max_T tot-E "                           # hydro
+vars1D+="m_ej_bern "                                    # ejecta
+vars1D+="min_alpha C-norm2 mass num_c2p_fail "          # GR evolution
+vars1D+="max_B2 div_B "                                 # magnetic fields
+vars1D+="max_sc_nG_00,max_sc_nG_01,max_sc_nG_02 "       # neutrinos number densities
+vars1D+="max_sc_E_00,max_sc_E_01,max_sc_E_02"           # neutrinos energy densities
 
 boundary=""
 fps=""
 planes=("xy" "xz")
 vars2D=("rho" "ye")
-vars2D+=("B_x" "B_y" "B_z")             # magnetic fields
-vars2D+=("m1_n_e" "m1_n_ae" "m1_n_x")   # neutrinos number densities
-vars2D+=("m1_J_e" "m1_J_ae" "m1_J_x")   # neutrinos energy densities
+vars2D+=("B_x" "B_y" "B_z")                             # magnetic fields
+#vars2D+=("m1_n_e" "m1_n_ae" "m1_n_x")                   # neutrinos number densities
+#vars2D+=("m1_J_e" "m1_J_ae" "m1_J_x")                   # neutrinos energy densities
+vars2D+=("m1_eta_0_e" "m1_eta_0_ae" "m1_eta_0_x")       # neutrino number emissivities
+vars2D+=("m1_eta_1_e" "m1_eta_1_ae" "m1_eta_1_x")       # neutrino energy emissivities
+vars2D+=("m1_kappa_0_e" "m1_kappa_0_ae" "m1_kappa_0_x") # neutrino number absorptivities
+vars2D+=("m1_kappa_1_e" "m1_kappa_1_ae" "m1_kappa_1_x") # neutrino energy absorptivities
+vars2D+=("m1_scat_1_e" "m1_scat_1_ae" "m1_scat_1_x")    # neutrinos scattering
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -123,10 +127,12 @@ echo "Running 2D analysis plots"
 
 cd ${DIR_REP}/yaaps/examples
 
-for var in "${vars2D[@]}"; do
-    echo "  Plotting ${var} ..."
+for plane in "${planes[@]}"; do
+    echo
+    echo "Plotting plane ${plane} ..."
 
-    for plane in "${planes[@]}"; do
+    for var in "${vars2D[@]}"; do
+        echo "  Plotting ${var} ..."
 
         exec="parallel_anim.py      \
             ${var}                  \
