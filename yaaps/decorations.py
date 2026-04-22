@@ -33,6 +33,7 @@ _color_kwargs_default: dict[str, Callable[[dict], dict]] = {
     "hydro.aux.T": _update_defaults(cmap='hot', norm='lin'),
     "hydro.aux.e": _update_defaults(cmap='plasma', norm='log'),
     "hydro.aux.hu_t": _update_defaults(cmap='managua', norm='lin', vmin=-1.1, vmax=-.9),
+
     "M1.lab.sc_E_00": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
     "M1.lab.sc_E_01": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
     "M1.lab.sc_E_02": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
@@ -45,6 +46,23 @@ _color_kwargs_default: dict[str, Callable[[dict], dict]] = {
     "M1.rad.sc_n_00": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
     "M1.rad.sc_n_01": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
     "M1.rad.sc_n_02": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
+
+    "M1.radmat.sc_eta_00": _update_defaults(cmap='plasma', norm='log'),
+    "M1.radmat.sc_eta_01": _update_defaults(cmap='plasma', norm='log'),
+    "M1.radmat.sc_eta_02": _update_defaults(cmap='plasma', norm='log'),
+    "M1.radmat.sc_eta_0_00": _update_defaults(cmap='viridis', norm='log'),
+    "M1.radmat.sc_eta_0_01": _update_defaults(cmap='viridis', norm='log'),
+    "M1.radmat.sc_eta_0_02": _update_defaults(cmap='viridis', norm='log'),
+    "M1.radmat.sc_kap_a_00": _update_defaults(cmap='plasma', norm='log'),
+    "M1.radmat.sc_kap_a_01": _update_defaults(cmap='plasma', norm='log'),
+    "M1.radmat.sc_kap_a_00": _update_defaults(cmap='plasma', norm='log'),
+    "M1.radmat.sc_kap_a_0_00": _update_defaults(cmap='viridis', norm='log'),
+    "M1.radmat.sc_kap_a_0_01": _update_defaults(cmap='viridis', norm='log'),
+    "M1.radmat.sc_kap_a_0_02": _update_defaults(cmap='viridis', norm='log'),
+    "M1.radmat.sc_kap_s_00": _update_defaults(cmap='plasma', norm='log'),
+    "M1.radmat.sc_kap_s_01": _update_defaults(cmap='plasma', norm='log'),
+    "M1.radmat.sc_kap_s_02": _update_defaults(cmap='plasma', norm='log'),
+
     "geom.con.H": _update_defaults(cmap='cubehelix', norm='log'),
     "geom.con.M": _update_defaults(cmap='cubehelix', norm='log'),
     "geom.con.C": _update_defaults(cmap='cubehelix', norm='log'),
@@ -54,30 +72,55 @@ _color_kwargs_default: dict[str, Callable[[dict], dict]] = {
 var_alias: dict[str, str] = {
     "rho": "hydro.prim.rho",
     "p": "hydro.prim.p",
-    "ye": "passive_scalar.r_0",
     "s": "hydro.aux.s",
+    "T": "hydro.aux.T",
+    "e": "hydro.aux.e",
+    "W": "hydro.aux.W",
+    "cs2": "hydro.aux.cs2",
+    "ye": "passive_scalar.r_0",
     "util_x": "hydro.prim.util_u_1",
     "util_y": "hydro.prim.util_u_2",
     "util_z": "hydro.prim.util_u_3",
+
     "B_x": "B.Bcc_1",
     "B_y": "B.Bcc_2",
     "B_z": "B.Bcc_3",
     "b_x": "field.aux.b_u_1",
     "b_y": "field.aux.b_u_2",
     "b_z": "field.aux.b_u_3",
+
     "m1_E_e": "M1.lab.sc_E_00",
-    "m1_E_a": "M1.lab.sc_E_01",
+    "m1_E_ae": "M1.lab.sc_E_01",
     "m1_E_x": "M1.lab.sc_E_02",
     "m1_nG_e": "M1.lab.sc_nG_00",
-    "m1_nG_a": "M1.lab.sc_nG_01",
+    "m1_nG_ae": "M1.lab.sc_nG_01",
     "m1_nG_x": "M1.lab.sc_nG_02",
     "m1_J_e": "M1.rad.sc_J_00",
-    "m1_J_a": "M1.rad.sc_J_01",
+    "m1_J_ae": "M1.rad.sc_J_01",
     "m1_J_x": "M1.rad.sc_J_02",
     "m1_n_e": "M1.rad.sc_n_00",
-    "m1_n_a": "M1.rad.sc_n_01",
+    "m1_n_ae": "M1.rad.sc_n_01",
     "m1_n_x": "M1.rad.sc_n_02",
+
+    "m1_eta_1_e": "M1.radmat.sc_eta_00",
+    "m1_eta_1_ae": "M1.radmat.sc_eta_01",
+    "m1_eta_1_x": "M1.radmat.sc_eta_02",
+    "m1_eta_0_e": "M1.radmat.sc_eta_0_00",
+    "m1_eta_0_ae": "M1.radmat.sc_eta_0_01",
+    "m1_eta_0_x": "M1.radmat.sc_eta_0_02",
+    "m1_kappa_1_e": "M1.radmat.sc_kap_a_00",
+    "m1_kappa_1_ae": "M1.radmat.sc_kap_a_01",
+    "m1_kappa_1_x": "M1.radmat.sc_kap_a_02",
+    "m1_kappa_0_e": "M1.radmat.sc_kap_a_0_00",
+    "m1_kappa_0_ae": "M1.radmat.sc_kap_a_0_01",
+    "m1_kappa_0_x": "M1.radmat.sc_kap_a_0_02",
+    "m1_scat_1_e": "M1.radmat.sc_kap_s_00",
+    "m1_scat_1_ae": "M1.radmat.sc_kap_s_01",
+    "m1_scat_1_x": "M1.radmat.sc_kap_s_02",
+
 }
+
+reverse_var_alias = {v: k for k, v in var_alias.items()}
 
 def update_color_kwargs(var: str, kwargs: dict, data: np.ndarray) -> dict:
     """
@@ -113,7 +156,10 @@ def update_color_kwargs(var: str, kwargs: dict, data: np.ndarray) -> dict:
         if 'vmin' not in kwargs or 'vmax' not in kwargs:
             fdata = fdata[np.isfinite(data)]
         if norm == 'log':
-            fdata = fdata[fdata>0]
+            if (len(fdata[fdata>0])>0):
+                fdata = fdata[fdata>0]
+            else:
+                norm='lin'
 
         if 'vmin' in kwargs:
             vmin = kwargs.pop('vmin')
