@@ -115,7 +115,7 @@ class Plot(ABC):
             self.ax = plt.gca()
         else:
             self.ax = ax
-        self.formatter = formatter
+
         if isinstance(formatter, str):
             self.formatter = PlotFormatter(mode=formatter)
         elif isinstance(formatter, PlotFormatterBase):

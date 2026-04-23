@@ -11,6 +11,8 @@ ap = argparse.ArgumentParser("Make an animation and save the frames as png")
 ap.add_argument('var', type=str, help="Variable to plot")
 ap.add_argument('-o','--outputpath', type=str, default=None,
                 help="Path to save at")
+ap.add_argument('--prefix', type=str, default=None,
+                help="Prefix for the frame files")
 ap.add_argument('-s1','--simdir_1', type=str,
                 help="First simulation directory")
 ap.add_argument('-s2','--simdir_2', type=str,
@@ -68,15 +70,15 @@ kwargs = dict(
     draw_meshblocks=args.meshblocks,
     vmin=args.vmin,
     vmax=args.vmax,
-    format="paper" if args.paper_format else "raw",
+    formatter="paper" if args.paper_format else "raw",
     )
 
 for k, v in list(kwargs.items()):
     if v is None:
         kwargs.pop(k)
 
-plots = [yp.NativeColorPlot(sim=sim, ax=ax, **kwargs)
-         for ax, sim in zip(axs, sims)]
+plots = tuple(yp.NativeColorPlot(sim=sim, ax=ax, **kwargs)
+              for ax, sim in zip(axs, sims))
 
 times = np.unique(np.concatenate([p.data.time_range for p in plots]))
 if args.time_min is not None:
@@ -85,12 +87,23 @@ if args.time_max is not None:
     times = times[times<=args.time_max]
 times = times[::args.time_every]
 
+if args.outputpath is not None:
+    outputpath = args.outputpath
+else:
+    outputpath = f"frames_{args.var}"
+
+
+if args.prefix is not None:
+    prefix = args.prefix
+else:
+    prefix = "frame_"
+
 frames = yp.save_frames(
         times=times,
         fig=fig,
         plots=plots,
-        output_dir=f"{args.var}_{args.sampling}",
-        prefix=f"frame_",
+        output_dir=outputpath,
+        prefix=prefix,
         dpi=300,
         )
 
