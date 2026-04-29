@@ -271,7 +271,7 @@ if __name__ == '__main__':
             **tqdmkwargs
         ))
 
-    output_mp4 = os.path.join(output_dir, f"{args.var}_{args.sampling}.mp4")
+    output_mp4 = os.path.join(output_dir, f"{args.var}_{args.sampling}_{args.boundary:.0f}.mp4")
     subprocess.run([
         "ffmpeg",
         "-y",                       # overwrite if exists
