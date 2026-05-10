@@ -8,7 +8,7 @@ Postprocessing scripts for (GR)athena++
 
 | Module | Description |
 |--------|-------------|
-| [Simulation](docs/simulation.md) | Main entry point — load data, create plots, access history/waveform/tracer/horizon files |
+| [Simulation](docs/simulation.md) | Main entry point — load data, create plots, access history/waveform/tracker/horizon files |
 | [Data Types](docs/datatypes.md) | `Native`, `Derived`, `Vector` mesh-data loaders and interpolation |
 | [2D Plotting](docs/plot2D.md) | Colour plots, quiver, streamline, contour, tracer scatter, animations |
 | [Plot Formatter](docs/plot_formatter.md) | Raw vs. paper mode — labels and unit conversions |
