@@ -106,13 +106,13 @@ Loads waveform extraction data at the given radius.
 sim.tra(index, prefix="tra") -> dict
 ```
 
-Loads tracer particle data for the given tracer index.
+Loads tracker (e.g., extrema or puncture) data for the given tracker index.
 
 **Parameters**
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `index` | `int` | — | Tracer particle index. |
+| `index` | `int` | — | Tracker index. |
 | `prefix` | `str` | `"tra"` | Filename prefix; the file is expected at `{path}/{prefix}.ext{index}.txt`. |
 
 **Returns** – `dict` mapping column names to NumPy arrays.
