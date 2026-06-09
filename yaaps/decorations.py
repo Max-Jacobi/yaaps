@@ -8,7 +8,7 @@ settings for various variables commonly used in GRAthena++ simulations.
 from typing import Callable
 import numpy as np
 
-from matplotlib.colors import LogNorm, Normalize, AsinhNorm
+from matplotlib.colors import LogNorm, Normalize, AsinhNorm, LinearSegmentedColormap
 
 
 def _update_defaults(**default) -> Callable[[dict], dict]:
@@ -26,9 +26,14 @@ def _update_defaults(**default) -> Callable[[dict], dict]:
         return {**default, **kwargs}
     return _inner
 
+boundaries = [0, 2.5/6, 4/6, 5/6, 1]
+colors = ['firebrick', 'white', 'royalblue', 'gold', 'darkorange']
+ye_cmap = LinearSegmentedColormap.from_list("custom_cmap", list(zip(boundaries, colors)))
+
+
 _color_kwargs_default: dict[str, Callable[[dict], dict]] = {
     "hydro.prim.rho": _update_defaults(cmap='magma', norm='log'),
-    "passive_scalar.r_0": _update_defaults(cmap='coolwarm_r', norm='lin'), # ye
+    "passive_scalar.r_0": _update_defaults(cmap=ye_cmap, norm='lin', vmin=0, vmax=.6),
     "hydro.aux.u_t": _update_defaults(cmap='RdBu', norm='lin', vmin=-1.1, vmax=-.9),
     "hydro.aux.T": _update_defaults(cmap='hot', norm='lin'),
     "hydro.aux.e": _update_defaults(cmap='plasma', norm='log'),
