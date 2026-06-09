@@ -7,6 +7,7 @@ parameter files, history files, waveform data, tracer particles, and 2D plots.
 """
 
 import os
+import json
 from typing import Optional, Iterable
 from functools import lru_cache
 
@@ -80,7 +81,13 @@ class Simulation:
         else:
             self.input = Input(input_path)
 
+        # try loading metadata from metadata.json in the simulation directory
         self.md = {}
+        md_path = os.path.join(path, "metadata.json")
+        if os.path.exists(md_path):
+            with open(md_path, 'r') as f:
+                self.md = json.load(f)
+
 
         rl  = 0
         if 'trackers_extrema/ref_level' in self.input:

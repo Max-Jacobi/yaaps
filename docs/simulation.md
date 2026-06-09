@@ -44,7 +44,7 @@ sim = Simulation("/path/to/simulation/output")
 | `input` | `Input` | Parsed [`Input`](input.md) object containing all simulation parameters. |
 | `problem_id` | `str` | The problem ID from the input file (`job/problem_id`). |
 | `dx` | `list[float]` | Grid spacings `[dx1, dx2, dx3]` at the finest refinement level. |
-| `md` | `dict` | Mutable metadata dictionary; may contain `"t_merg"` for merger offset. |
+| `md` | `dict` | Mutable metadata dictionary; may contain `"t_merg"` for merger offset. If `metadata.json` exists in the simulation directory it is read into this dict |
 
 ---
 
