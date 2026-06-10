@@ -637,7 +637,7 @@ def _anim_sim_combined(
     time_min = cfg.get("time_min")
     time_max = cfg.get("time_max")
     time_every = cfg.get("time_every", 1)
-    fps = cfg.get("fps", "24")
+    fps = str(cfg.get("fps", 24))
 
     # Get union of all sim times
     all_times = []
@@ -813,7 +813,7 @@ def _anim_var_combined(
     time_min = cfg.get("time_min")
     time_max = cfg.get("time_max")
     time_every = cfg.get("time_every", 1)
-    fps = cfg.get("fps", "24")
+    fps = str(cfg.get("fps", 24))
 
     first_var = variables[0] if isinstance(variables[0], str) else variables[0]["var"]
 
