@@ -22,13 +22,13 @@ ap = argparse.ArgumentParser("Create a 2D grid plot using yaaps and save it as p
 ap.add_argument('vars', type=str, help="Variables to plot. "
                 "Optionally the source can be specified as hor/var, tra/var, wav/var to avoid ambiguity. "
                 "Multiple variables can be plotted in the same subplot by separating them with commas.",
-                nargs='+', default=["max_rho"])
+                nargs='*', default=["max_rho"])
 ap.add_argument('-o','--outputpath', type=str, default=None,
                 help="Path to save at")
-ap.add_argument('-t','--time', type=float, default=1e5,
-                help="Time to plot at")
 ap.add_argument('-s','--simdir', type=str, default=['active'], nargs='+',
                 help="Directories to look for athdf files in")
+ap.add_argument('-l','--listvars', action="store_true",
+                help="List the available variables and exit")
 ap.add_argument('-c','--colors', type=str, default=None, nargs='+',
                 help="Colors to plot the simulations in")
 ap.add_argument('-v','--xvar', type=str, default="time",
@@ -61,6 +61,11 @@ for sim in args.simdir:
     except FileNotFoundError:
         print(f"No parfile in {sim}, skipping", file=sys.stderr)
 
+if args.listvars:
+    print("Available vars in sims[0]:")
+    print(sims[0].hst.keys())
+    exit(0)
+
 vars = []
 for v in args.vars:
     if ',' in v:
@@ -81,10 +86,16 @@ elif len(sims) > len(args.colors):
 def eval_f(f: str) -> Callable:
     if f in ['None', 'id']:
         return lambda d: d
-    if f == 'relabs':
+    elif f in ('relabs', 'absrel'):
         return lambda d: np.abs(d/d[0] - 1)
-    if f == 'inv':
-        return lambda d: 1/d
+    elif f == 'absdiff':
+        return lambda d: np.abs(d-d[0])
+    elif f == 'diff':
+        return lambda d: d-d[0]
+    elif f == 'inv':
+        return np.reciprocal
+    elif f == 'abs':
+        return np.abs
 
     func = eval(f)
     if isinstance(func, (int, float)):
@@ -94,7 +105,10 @@ def eval_f(f: str) -> Callable:
         raise ValueError(f"{f} does not evaluate to a callable object")
     return func
 
-funcs = {var.strip(): eval_f(f.strip()) for var, f in map(lambda s: s.split(':'), args.funcs)}
+funcs = {var.strip(): eval_f(f.strip())
+         for var, f in map(lambda s: s.split(':'), args.funcs)}
+func_names = {var.strip(): f.strip().replace("np.", "")
+              for var, f in map(lambda s: s.split(':'), args.funcs)}
 
 ylim_dict = {}
 for item in args.ylim:
@@ -168,13 +182,23 @@ for var, ax in zip(vars, axs.flat):
     ax.set_xlabel(args.xvar)
 
     if isinstance(var, list):
-        ax.set_ylabel(" ".join(var))
+        ylabel = " ".join(var)
+        for v in var:
+            key = v
+            if key in funcs:
+                func_name = func_names.get(key, None)
+                if func_name: ylabel = ylabel.replace(v, f"{func_name}({v})")
+        ax.set_ylabel(ylabel)
         for v in var:
             if v in args.ylog + (auto_log_keys if not args.no_auto_log else []):
                 ax.set_yscale('log')
                 break
     else:
-        ax.set_ylabel(var)
+        ylabel = var
+        if var in funcs:
+            func_name = func_names.get(var, None)
+            if func_name: ylabel = f"{func_name}({var})"
+        ax.set_ylabel(ylabel)
         if var in args.ylog:
             ax.set_yscale('log')
 
