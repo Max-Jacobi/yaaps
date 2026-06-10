@@ -120,7 +120,7 @@ type = "var_combined"
 
 # List of variables to combine. Can be plain strings or tables with per-var options.
 # Plain string form:
-# vars = ["hydro.prim.rho", "hydro.prim.press"]
+# vars = ["hydro.prim.rho", "hydro.prim.p"]
 
 # Table form with per-variable options:
 [[multi_var_snapshots.vars]]
@@ -129,7 +129,7 @@ cmap = "magma"
 norm = "log"
 
 [[multi_var_snapshots.vars]]
-var = "hydro.prim.press"
+var = "hydro.prim.p"
 cmap = "inferno"
 norm = "log"
 

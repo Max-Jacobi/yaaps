@@ -83,10 +83,11 @@ class Simulation:
 
         # try loading metadata from metadata.json in the simulation directory
         self.md = {}
-        md_path = os.path.join(path, "metadata.json")
-        if os.path.exists(md_path):
-            with open(md_path, 'r') as f:
-                self.md = json.load(f)
+        for md_path in ("metadata.json", "../metadata.json"):
+            md_path = os.path.join(path, md_path)
+            if os.path.exists(md_path):
+                with open(md_path, 'r') as f:
+                    self.md = json.load(f)
 
 
         rl  = 0
