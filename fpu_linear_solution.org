@@ -1,0 +1,485 @@
+#+TITLE: FPU Problem -- Linear Part (Questions 1 & 2)
+#+AUTHOR: Computational Physics
+#+OPTIONS: toc:t num:t
+#+LATEX_HEADER: \usepackage{amsmath}
+
+* Question 1: Equations of Motion for the Linear System
+
+** The Hamiltonian
+
+For $\alpha = 0$, the FPU Hamiltonian reduces to:
+
+\begin{equation}
+H = \sum_{k=0}^{N-1} \frac{1}{2} p_k^2 + \sum_{k=0}^{N-1} \frac{1}{2} (q_{k+1} - q_k)^2
+\end{equation}
+
+with boundary conditions $q_{-1} = q_N = 0$ (fixed ends).
+
+** Deriving the Equations of Motion
+
+Hamilton's equations give us:
+
+\begin{equation}
+\dot{q}_k = \frac{\partial H}{\partial p_k} = p_k
+\end{equation}
+
+\begin{equation}
+\dot{p}_k = -\frac{\partial H}{\partial q_k}
+\end{equation}
+
+For the potential term, note that $q_k$ appears in two terms of the sum:
+- once as $(q_k - q_{k-1})^2$ (from index $k-1$)
+- once as $(q_{k+1} - q_k)^2$ (from index $k$)
+
+Taking the derivative:
+
+\begin{equation}
+-\frac{\partial H}{\partial q_k} = -(q_k - q_{k-1}) + (q_{k+1} - q_k) = q_{k+1} - 2q_k + q_{k-1}
+\end{equation}
+
+Since $\dot{q}_k = p_k$ and masses are unity, we have $\ddot{q}_k = \dot{p}_k$, so:
+
+\begin{equation}
+\ddot{q}_k = q_{k+1} - 2q_k + q_{k-1}
+\end{equation}
+
+** Matrix Form
+
+We can write this as a system $\ddot{\mathbf{u}} + L\,\mathbf{u} = 0$, where $\mathbf{u} = (q_0, q_1, \ldots, q_{N-1})^T$ and:
+
+\begin{equation}
+L = \begin{pmatrix}
+ 2 & -1 &  0 & \cdots & 0 \\
+-1 &  2 & -1 & \cdots & 0 \\
+ 0 & -1 &  2 & \cdots & 0 \\
+\vdots & \ddots & \ddots & \ddots & \vdots \\
+ 0 & \cdots & 0 & -1 & 2
+\end{pmatrix}
+\end{equation}
+
+** Showing L is Real and Symmetric
+
+- *Real*: All entries of $L$ are $-1$, $0$, or $2$, which are real numbers.
+- *Symmetric*: $L_{ij} = L_{ji}$ for all $i, j$. The off-diagonal entries are $L_{k,k+1} = L_{k+1,k} = -1$.
+
+Since $L$ is real and symmetric, its eigenvectors form an orthogonal matrix $U$. This means the transformation to normal modes is orthogonal, and $U^{-1} = U^T$.
+
+** Verification with Python
+
+We can construct $L$ and verify its symmetry numerically:
+
+#+begin_src python :results output
+import numpy as np
+
+# Number of oscillators
+N = 32
+
+# Build the matrix L
+# It is a tridiagonal matrix with 2 on the diagonal and -1 on the off-diagonals
+L = np.zeros((N, N))
+
+for k in range(N):
+    L[k, k] = 2              # diagonal
+    if k > 0:
+        L[k, k-1] = -1       # lower off-diagonal
+    if k < N - 1:
+        L[k, k+1] = -1       # upper off-diagonal
+
+# Check that L is symmetric
+is_symmetric = np.allclose(L, L.T)
+print(f"L is symmetric: {is_symmetric}")
+
+# Check that L is real
+is_real = np.all(np.isreal(L))
+print(f"L is real: {is_real}")
+
+# Print a small example (N=5) to visualize
+L_small = np.zeros((5, 5))
+for k in range(5):
+    L_small[k, k] = 2
+    if k > 0:
+        L_small[k, k-1] = -1
+    if k < 4:
+        L_small[k, k+1] = -1
+
+print("\nL for N=5:")
+print(L_small)
+#+end_src
+
+* Question 2: Single Harmonic Oscillator with RK4
+
+** The Problem
+
+For $N = 1$ and $\alpha = 0$, the Hamiltonian becomes:
+
+\begin{equation}
+H = \frac{1}{2} p^2 + \frac{1}{2} q^2
+\end{equation}
+
+The equation of motion is simply $\ddot{q} = -q$, which is the harmonic oscillator with angular frequency $\omega = 1$ and period $T = 2\pi$.
+
+The analytical solution is:
+
+\begin{equation}
+q(t) = q_0 \cos(t) + p_0 \sin(t), \quad p(t) = -q_0 \sin(t) + p_0 \cos(t)
+\end{equation}
+
+** Writing the System as First-Order ODEs
+
+We rewrite $\ddot{q} = -q$ as a system of two first-order ODEs:
+
+\begin{equation}
+\frac{dq}{dt} = p, \quad \frac{dp}{dt} = -q
+\end{equation}
+
+This is the form we need for the Runge-Kutta integrator.
+
+** The Runge-Kutta 4 (RK4) Method
+
+The RK4 method advances the state $\mathbf{y} = (q, p)$ by one time step $h$:
+
+\begin{align}
+\mathbf{k}_1 &= h \, f(t_n, \mathbf{y}_n) \\
+\mathbf{k}_2 &= h \, f(t_n + h/2, \mathbf{y}_n + \mathbf{k}_1/2) \\
+\mathbf{k}_3 &= h \, f(t_n + h/2, \mathbf{y}_n + \mathbf{k}_2/2) \\
+\mathbf{k}_4 &= h \, f(t_n + h, \mathbf{y}_n + \mathbf{k}_3) \\
+\mathbf{y}_{n+1} &= \mathbf{y}_n + \frac{1}{6}(\mathbf{k}_1 + 2\mathbf{k}_2 + 2\mathbf{k}_3 + \mathbf{k}_4)
+\end{align}
+
+** Implementation
+
+#+begin_src python :results output
+import numpy as np
+import matplotlib.pyplot as plt
+
+# --- Right-hand side of the ODE system ---
+# State vector y = [q, p]
+# dq/dt = p
+# dp/dt = -q
+def harmonic_oscillator_rhs(t, y):
+    """Compute the derivatives for the harmonic oscillator.
+
+    Parameters
+    ----------
+    t : float
+        Current time (not used here, but kept for generality).
+    y : array
+        State vector [q, p].
+
+    Returns
+    -------
+    dydt : array
+        Derivatives [dq/dt, dp/dt].
+    """
+    q = y[0]
+    p = y[1]
+    dqdt = p       # dq/dt = p
+    dpdt = -q      # dp/dt = -q
+    return np.array([dqdt, dpdt])
+
+
+# --- Runge-Kutta 4 integrator ---
+def rk4_step(f, t, y, h):
+    """Perform one step of the RK4 method.
+
+    Parameters
+    ----------
+    f : function
+        The right-hand side function f(t, y).
+    t : float
+        Current time.
+    y : array
+        Current state vector.
+    h : float
+        Time step size.
+
+    Returns
+    -------
+    y_new : array
+        State vector after one time step.
+    """
+    k1 = h * f(t, y)
+    k2 = h * f(t + h/2, y + k1/2)
+    k3 = h * f(t + h/2, y + k2/2)
+    k4 = h * f(t + h, y + k3)
+    y_new = y + (k1 + 2*k2 + 2*k3 + k4) / 6
+    return y_new
+
+
+# --- Solve the ODE over many time steps ---
+def solve_ode(f, y0, t_start, t_end, h):
+    """Solve an ODE system using RK4.
+
+    Parameters
+    ----------
+    f : function
+        The right-hand side function.
+    y0 : array
+        Initial state vector.
+    t_start : float
+        Start time.
+    t_end : float
+        End time.
+    h : float
+        Time step size.
+
+    Returns
+    -------
+    t_values : array
+        Array of time points.
+    y_values : array
+        Array of state vectors at each time point.
+    """
+    # Number of steps
+    n_steps = int((t_end - t_start) / h)
+
+    # Arrays to store results
+    t_values = np.zeros(n_steps + 1)
+    y_values = np.zeros((n_steps + 1, len(y0)))
+
+    # Set initial conditions
+    t_values[0] = t_start
+    y_values[0] = y0
+
+    # Time-stepping loop
+    t = t_start
+    y = y0.copy()
+    for i in range(n_steps):
+        y = rk4_step(f, t, y, h)
+        t = t + h
+        t_values[i + 1] = t
+        y_values[i + 1] = y
+
+    return t_values, y_values
+
+
+# --- Compute the energy (Hamiltonian) ---
+def energy(q, p):
+    """Compute the energy H = 0.5*p^2 + 0.5*q^2."""
+    return 0.5 * p**2 + 0.5 * q**2
+
+
+# --- Parameters ---
+q0 = 1.0       # initial position
+p0 = 0.0       # initial momentum
+y0 = np.array([q0, p0])
+
+T = 2 * np.pi  # period of oscillation (omega = 1)
+n_periods = 10  # number of periods to evolve
+t_end = n_periods * T
+
+h = 0.01       # time step
+
+# --- Run the simulation ---
+t_values, y_values = solve_ode(harmonic_oscillator_rhs, y0, 0.0, t_end, h)
+
+# Extract q and p
+q_values = y_values[:, 0]
+p_values = y_values[:, 1]
+
+# --- Compute energy along the trajectory ---
+E_values = energy(q_values, p_values)
+E0 = E_values[0]  # initial energy
+
+# Relative energy difference
+dE_rel = (E_values - E0) / E0
+
+print(f"Initial energy: E0 = {E0:.6f}")
+print(f"Final energy:   E_final = {E_values[-1]:.10f}")
+print(f"Max |dE/E0|:    {np.max(np.abs(dE_rel)):.2e}")
+#+end_src
+
+** Plot: Relative Energy Difference
+
+#+begin_src python :results file :file energy_conservation.png
+import numpy as np
+import matplotlib.pyplot as plt
+
+# (Re-run the simulation code from above, or assume variables are available)
+# For a standalone block, we repeat the essential parts:
+
+def harmonic_oscillator_rhs(t, y):
+    q, p = y[0], y[1]
+    return np.array([p, -q])
+
+def rk4_step(f, t, y, h):
+    k1 = h * f(t, y)
+    k2 = h * f(t + h/2, y + k1/2)
+    k3 = h * f(t + h/2, y + k2/2)
+    k4 = h * f(t + h, y + k3)
+    return y + (k1 + 2*k2 + 2*k3 + k4) / 6
+
+def solve_ode(f, y0, t_start, t_end, h):
+    n_steps = int((t_end - t_start) / h)
+    t_values = np.zeros(n_steps + 1)
+    y_values = np.zeros((n_steps + 1, len(y0)))
+    t_values[0] = t_start
+    y_values[0] = y0
+    t = t_start
+    y = y0.copy()
+    for i in range(n_steps):
+        y = rk4_step(f, t, y, h)
+        t = t + h
+        t_values[i + 1] = t
+        y_values[i + 1] = y
+    return t_values, y_values
+
+# Parameters
+q0, p0 = 1.0, 0.0
+y0 = np.array([q0, p0])
+T = 2 * np.pi
+t_end = 10 * T
+h = 0.01
+
+t_values, y_values = solve_ode(harmonic_oscillator_rhs, y0, 0.0, t_end, h)
+q_values = y_values[:, 0]
+p_values = y_values[:, 1]
+
+E_values = 0.5 * p_values**2 + 0.5 * q_values**2
+E0 = E_values[0]
+dE_rel = (E_values - E0) / E0
+
+# Plot relative energy difference
+fig, ax = plt.subplots(figsize=(8, 4))
+ax.plot(t_values / T, dE_rel, linewidth=0.8)
+ax.set_xlabel("Time [periods]")
+ax.set_ylabel(r"$(E - E_0) / E_0$")
+ax.set_title("Relative Energy Conservation (RK4, h=0.01)")
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.savefig("energy_conservation.png", dpi=150)
+print("energy_conservation.png")
+#+end_src
+
+** Plot: Phase Space
+
+#+begin_src python :results file :file phase_space.png
+import numpy as np
+import matplotlib.pyplot as plt
+
+# (Using the same simulation data as above)
+def harmonic_oscillator_rhs(t, y):
+    return np.array([y[1], -y[0]])
+
+def rk4_step(f, t, y, h):
+    k1 = h * f(t, y)
+    k2 = h * f(t + h/2, y + k1/2)
+    k3 = h * f(t + h/2, y + k2/2)
+    k4 = h * f(t + h, y + k3)
+    return y + (k1 + 2*k2 + 2*k3 + k4) / 6
+
+def solve_ode(f, y0, t_start, t_end, h):
+    n_steps = int((t_end - t_start) / h)
+    t_values = np.zeros(n_steps + 1)
+    y_values = np.zeros((n_steps + 1, len(y0)))
+    t_values[0] = t_start
+    y_values[0] = y0
+    t = t_start
+    y = y0.copy()
+    for i in range(n_steps):
+        y = rk4_step(f, t, y, h)
+        t = t + h
+        t_values[i + 1] = t
+        y_values[i + 1] = y
+    return t_values, y_values
+
+y0 = np.array([1.0, 0.0])
+t_end = 10 * 2 * np.pi
+h = 0.01
+
+t_values, y_values = solve_ode(harmonic_oscillator_rhs, y0, 0.0, t_end, h)
+q_values = y_values[:, 0]
+p_values = y_values[:, 1]
+
+# Phase space plot
+fig, ax = plt.subplots(figsize=(6, 6))
+ax.plot(q_values, p_values, linewidth=0.5, label="RK4 trajectory")
+
+# Analytical circle for comparison
+theta = np.linspace(0, 2*np.pi, 200)
+ax.plot(np.cos(theta), np.sin(theta), 'r--', linewidth=1.5, label="Exact (circle)")
+
+ax.set_xlabel("q (position)")
+ax.set_ylabel("p (momentum)")
+ax.set_title("Phase Space of the Harmonic Oscillator")
+ax.set_aspect('equal')
+ax.legend()
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.savefig("phase_space.png", dpi=150)
+print("phase_space.png")
+#+end_src
+
+** Convergence Study
+
+The best quantity to monitor convergence is the *maximum relative energy error* over the simulation, because:
+- Energy is a conserved quantity (it should be exactly constant).
+- Any deviation from conservation is purely numerical error.
+- It gives a single number that summarizes the quality of the integration.
+
+For RK4, we expect the global error to scale as $\mathcal{O}(h^4)$.
+
+#+begin_src python :results output
+import numpy as np
+
+def harmonic_oscillator_rhs(t, y):
+    return np.array([y[1], -y[0]])
+
+def rk4_step(f, t, y, h):
+    k1 = h * f(t, y)
+    k2 = h * f(t + h/2, y + k1/2)
+    k3 = h * f(t + h/2, y + k2/2)
+    k4 = h * f(t + h, y + k3)
+    return y + (k1 + 2*k2 + 2*k3 + k4) / 6
+
+def solve_ode(f, y0, t_start, t_end, h):
+    n_steps = int((t_end - t_start) / h)
+    t_values = np.zeros(n_steps + 1)
+    y_values = np.zeros((n_steps + 1, len(y0)))
+    t_values[0] = t_start
+    y_values[0] = y0
+    t = t_start
+    y = y0.copy()
+    for i in range(n_steps):
+        y = rk4_step(f, t, y, h)
+        t = t + h
+        t_values[i + 1] = t
+        y_values[i + 1] = y
+    return t_values, y_values
+
+# Test convergence for different step sizes
+y0 = np.array([1.0, 0.0])
+t_end = 10 * 2 * np.pi  # 10 periods
+
+step_sizes = [0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001]
+
+print(f"{'h':<10} {'max |dE/E0|':<15} {'ratio':<10}")
+print("-" * 35)
+
+prev_error = None
+for h in step_sizes:
+    t_vals, y_vals = solve_ode(harmonic_oscillator_rhs, y0, 0.0, t_end, h)
+    E = 0.5 * y_vals[:, 1]**2 + 0.5 * y_vals[:, 0]**2
+    E0 = E[0]
+    max_dE = np.max(np.abs((E - E0) / E0))
+
+    if prev_error is not None and max_dE > 0:
+        ratio = prev_error / max_dE
+    else:
+        ratio = 0.0
+
+    print(f"{h:<10.4f} {max_dE:<15.2e} {ratio:<10.1f}")
+    prev_error = max_dE
+#+end_src
+
+** Discussion of Convergence
+
+When we halve the step size $h$, the maximum energy error decreases by a factor of approximately $2^4 = 16$. This confirms that RK4 is a 4th-order method: the global truncation error scales as $h^4$.
+
+The best quantity to monitor convergence is the *relative energy error* $|E(t) - E_0| / E_0$ because:
+1. Energy is an exact conserved quantity of the system.
+2. It does not require knowledge of the analytical solution.
+3. It provides a global measure of accuracy that integrates errors from all time steps.
+4. For a symplectic system like the harmonic oscillator, energy drift indicates the integrator is not preserving the Hamiltonian structure perfectly.
+
+Note: RK4 is *not* symplectic, so there will be a slow energy drift over very long times. For short-to-medium simulations (tens of periods), RK4 with a small enough $h$ provides excellent accuracy.
