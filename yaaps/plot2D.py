@@ -664,13 +664,6 @@ class TracerPlot(ScatterPlot):
                       for _ in self.tracers]
         self.ax.set_aspect('equal')
 
-        # Set axis labels using formatter if in paper mode
-        if self.formatter.mode == "paper":
-            x_coord = "x1v" if self.coord_keys[0] == "x1" else self.coord_keys[0]
-            y_coord = "x2v" if self.coord_keys[1] == "x2" else self.coord_keys[1]
-            self.ax.set_xlabel(self.formatter.format_axis_label(x_coord))
-            self.ax.set_ylabel(self.formatter.format_axis_label(y_coord))
-
     def plot(self, time: float) -> list[Artist]:
         """
         Update tracer positions and trails at the given time.
@@ -702,16 +695,13 @@ class TracerPlot(ScatterPlot):
                     self.c[ii] = np.interp(time, tr_t, tr_c)
 
             if self.trail_len > 0:
-                if (t_tr := time - self.trail_len) >= tr_t.min():
+                if (time - self.trail_len) >= tr_t.min():
                     x_tr = np.interp(time-self.trail_len, tr_t, tr_x)
                     y_tr = np.interp(time-self.trail_len, tr_t, tr_y)
                     self.lines[ii].set_data([x_tr, self.x[ii]], [y_tr, self.y[ii]])
 
-        # Convert coordinates if in paper mode
-        x_coord = "x1v" if self.coord_keys[0] == "x1" else self.coord_keys[0]
-        y_coord = "x2v" if self.coord_keys[1] == "x2" else self.coord_keys[1]
-        converted_x = self.formatter.convert_coordinate(x_coord, self.x)
-        converted_y = self.formatter.convert_coordinate(y_coord, self.y)
+        converted_x = self.formatter.convert_coordinate('x1v', self.x)
+        converted_y = self.formatter.convert_coordinate('x2v', self.y)
 
         return self.make_plot((converted_x, converted_y), c=self.c, time=time)
 

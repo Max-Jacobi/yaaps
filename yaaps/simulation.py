@@ -70,7 +70,7 @@ class Simulation:
             self.name = path_split[-1]
         if input_path is None:
             for file in os.listdir(path):
-                if file.endswith('.inp') or file.endswith('.par'):
+                if any(file.endswith(end) for end in (".rst", ".inp", ".par")):
                     try:
                         self.input = Input(os.path.join(path, file))
                         break

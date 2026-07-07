@@ -51,6 +51,8 @@ ap.add_argument('--xlim', type=float, nargs=2, default=None,
                 help="Limits for x axis")
 ap.add_argument('--no-auto-log', action='store_true',
                 help="Disable automatic log scaling for y axis")
+ap.add_argument('--no-legend', action='store_true',
+                help="Disable legend for simulations")
 
 args = ap.parse_args()
 
@@ -170,15 +172,18 @@ if all(b == bases[0] for b in bases):
 for var, ax in zip(vars, axs.flat):
     for sim, c in zip(sims, args.colors):
         name = sim.path.replace(common_path, '').strip('/').replace(suffix, '')
-        if isinstance(var, list):
-            for v, ls in zip(var, ('-', '--', ':', '-.')):
-                if sim.path == sims[0].path:
-                    label = v
-                else:
-                    label= None
-                plot(v, ax, sim, c=c, ls=ls, label=label)
-        else:
-            plot(var, ax, sim, c=c, label=name)
+        try:
+            if isinstance(var, list):
+                for v, ls in zip(var, ('-', '--', ':', '-.')):
+                    if sim.path == sims[0].path:
+                        label = v
+                    else:
+                        label= None
+                    plot(v, ax, sim, c=c, ls=ls, label=label)
+            else:
+                plot(var, ax, sim, c=c, label=name)
+        except FileNotFoundError:
+            print(f"No hst file in {sim.path}, skipping", file=sys.stderr)
     ax.set_xlabel(args.xvar)
 
     if isinstance(var, list):
@@ -206,7 +211,7 @@ sim_legend_exists = False
 for var, ax in zip(vars, axs.flat):
     if isinstance(var, list):
         ax.legend()
-    elif not sim_legend_exists:
+    elif not sim_legend_exists and not args.no_legend:
         ax.legend()
         sim_legend_exists = True
     if isinstance(var, list):
