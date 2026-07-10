@@ -97,11 +97,17 @@ class AthdfScraper:
         RuntimeError: If no readable athdf files are found in the directory.
     """
 
-    def __init__(self, dir_data: str, N_B: Union[int, float, list, tuple]):
+    def __init__(
+        self, dir_data: str, N_B: Union[int, float, list, tuple],
+        source_dirs: Union[list, None] = None,
+    ):
         self.dir_data = os.path.abspath(dir_data)
         if isinstance(N_B, (int, float)):
             N_B = (N_B, N_B, N_B)
         self.N_B = tuple(int(v) for v in N_B)
+        # caller (Simulation) may already know the restart-directory listing
+        # from its own setup - reuse it instead of re-scanning dir_data.
+        self._source_dirs = source_dirs if source_dirs is not None else find_restart_dirs(self.dir_data)
 
         self._stems: dict[str, str] = {}
         self._fns: dict[str, dict[int, str]] = {}
@@ -112,6 +118,7 @@ class AthdfScraper:
         self._out_variable_names: dict[str, tuple] = {}
         self._out_num_variables: dict[str, tuple] = {}
         self._out_ng: dict[str, tuple] = {}
+        self._out_max_shape: dict[str, tuple] = {}
 
         self._scan()
         self._var_map = self._parse_to_var_key()
@@ -119,7 +126,7 @@ class AthdfScraper:
     # -- scanning / caching --------------------------------------------
 
     def _scan(self) -> None:
-        source_dirs = find_restart_dirs(self.dir_data)
+        source_dirs = self._source_dirs
 
         # out -> {iter: (name, abspath, mtime, size)}; when the same (out,
         # iter) pair appears in more than one restart directory (a later
@@ -185,6 +192,21 @@ class AthdfScraper:
                     try:
                         with h5py.File(fn_abs, "r") as f:
                             time_val = float(f.attrs["Time"])
+                            # Opportunistically grab the constant per-out-set
+                            # attrs (from the first file) and the dataset
+                            # shape (from the last/max-iteration file, always
+                            # opened live below) while the file is already
+                            # open, instead of reopening it later just for
+                            # that - matters a lot on slow/network filesystems.
+                            if i == 0 and out not in self._out_dataset_names:
+                                self._out_dataset_names[out] = _decode_attr(f.attrs["DatasetNames"])
+                                self._out_variable_names[out] = _decode_attr(f.attrs["VariableNames"])
+                                self._out_num_variables[out] = tuple(int(v) for v in f.attrs["NumVariables"])
+                            if is_last:
+                                dataset_names = self._out_dataset_names.get(out)
+                                if dataset_names is None:
+                                    dataset_names = _decode_attr(f.attrs["DatasetNames"])
+                                self._out_max_shape[out] = f[dataset_names[0]].shape
                     except OSError:
                         if not is_last:
                             warnings.warn(
@@ -222,6 +244,9 @@ class AthdfScraper:
         })
 
         for out in self._fns:
+            if out in self._out_dataset_names:
+                # already captured opportunistically while scanning above
+                continue
             dataset_names, variable_names, num_variables = self._read_out_attrs(out)
             self._out_dataset_names[out] = dataset_names
             self._out_variable_names[out] = variable_names
@@ -268,15 +293,19 @@ class AthdfScraper:
             num_variables = tuple(int(v) for v in f.attrs["NumVariables"])
         return dataset_names, variable_names, num_variables
 
-    def _get_data_spec_iter(self, out: str, iterate: int) -> tuple:
-        fn = self.get_iter_fn(out, iterate)
+    def _max_iter_shape(self, out: str) -> tuple:
+        # shape of the max-iteration file's primary dataset, needed to infer
+        # dimensionality/slicing/ghost-zone counts. Usually already captured
+        # opportunistically while scanning (that file is always opened live -
+        # see _scan); only reopen it here as a fallback.
+        shape = self._out_max_shape.get(out)
+        if shape is not None:
+            return shape
+        maxiter = int(self._iters_arr[out][-1])
+        fn = self.get_iter_fn(out, maxiter)
         dataset_name = self._out_dataset_names[out][0]
         with h5py.File(fn, "r") as f:
-            shape = f[dataset_name].shape
-        num_vars, num_meshblocks = shape[0], shape[1]
-        dim_xyz = shape[-3:][::-1]
-        slicing = tuple(f"x{ix}" for ix in range(1, 4) if dim_xyz[ix - 1] > 1)
-        return num_vars, num_meshblocks, dim_xyz, slicing
+            return f[dataset_name].shape
 
     def _get_ghosts(self, dim_xyz: tuple, N_B: tuple) -> tuple:
         dg = []
@@ -293,8 +322,9 @@ class AthdfScraper:
     def _parse_to_var_key(self) -> dict:
         var_map = {}
         for out in self._fns:
-            maxiter = int(self._iters_arr[out][-1])
-            _, _, dim_xyz, slicing = self._get_data_spec_iter(out, maxiter)
+            shape = self._max_iter_shape(out)
+            dim_xyz = shape[-3:][::-1]
+            slicing = tuple(f"x{ix}" for ix in range(1, 4) if dim_xyz[ix - 1] > 1)
 
             dataset_names = self._out_dataset_names[out]
             vars_split = _split_chunks(
@@ -441,6 +471,37 @@ class AthdfScraper:
         with h5py.File(fn_data, "r") as f:
             dataset = np.array(f[dataset_name])
 
+        return self._extract_var(dataset, var_index, out, sampling, strip_dg)
+
+    def get_grid_and_var(
+        self, out: str, var: str, sampling, iterate: int = 0,
+        with_ghosts: bool = True, strip_dg: int = 0,
+    ) -> tuple:
+        """
+        Extract grid coordinates and field data for a variable together, in a
+        single file open - use this instead of separate get_grid()/get_var()
+        calls when loading both (the common case) to halve HDF5 opens.
+        """
+        sampling, var_info = self._parse_var_info(var, sampling, with_ghosts)
+        _, var_index, dg, dataset_name = var_info
+
+        fn_data = self.get_iter_fn(out, iterate)
+        with h5py.File(fn_data, "r") as f:
+            xyz = [np.array(f[grid_var]) for grid_var in sampling]
+            dataset = np.array(f[dataset_name])
+
+        field_data = self._extract_var(dataset, var_index, out, sampling, strip_dg)
+
+        if strip_dg > 0:
+            _, ng = self._out_ng[out]
+            var_sl, _ = self.slicer_physical(ng, sampling, dg=ng - strip_dg)
+            xyz = tuple(gr[sl] for gr, sl in zip(xyz, var_sl))
+        else:
+            xyz = tuple(xyz)
+
+        return xyz, field_data
+
+    def _extract_var(self, dataset, var_index: int, out: str, sampling, strip_dg: int) -> np.ndarray:
         field_data = np.transpose(dataset[var_index], (0, 3, 2, 1)).squeeze()
 
         if strip_dg > 0:

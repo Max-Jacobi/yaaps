@@ -209,9 +209,12 @@ class Native(MeshData):
         else:
             strip_dg = 0
 
-        xyz = self.sim.scrape.get_grid(out=out, sampling=self.sampling, iterate=it, strip_dg=strip_dg)
+        # grid + field data are read from the same file at the same
+        # iteration; fetch them together to halve HDF5 opens per load.
+        xyz, data = self.sim.scrape.get_grid_and_var(
+            out, self.var, self.sampling, iterate=it,
+            with_ghosts=self.ghosts, strip_dg=strip_dg)
         time = self.sim.scrape.get_iter_time(out, it)
-        data = self.sim.scrape.get_var(var=self.var, sampling=self.sampling, iterate=it, strip_dg=strip_dg)
         return xyz, data, time
 
     def __repr__(self):

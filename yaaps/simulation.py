@@ -72,12 +72,18 @@ class Simulation:
             self.name = path_split[-2]
         else:
             self.name = path_split[-1]
+
+        # computed once and reused everywhere below (scrape, hst/wav/tra/
+        # horizon) instead of re-scanning self.path for output-* subdirs on
+        # every access - matters on slow/network filesystems.
+        self._restart_dirs = find_restart_dirs(self.path)
+
         if input_path is None:
             # search restart directories (output-0000, output-0001, ...) in
             # ascending order if present, else the directory itself, mirroring
             # the historical external `combine` script's "first restart that
             # has it" behavior.
-            for restart_dir in find_restart_dirs(self.path):
+            for restart_dir in self._restart_dirs:
                 for file in os.listdir(restart_dir):
                     if any(file.endswith(end) for end in (".rst", ".inp", ".par")):
                         try:
@@ -133,7 +139,8 @@ class Simulation:
             Dictionary mapping column names to NumPy arrays of values,
             sorted by iteration or time to remove duplicate entries.
         """
-        return _straighten(_load_ascii_multi(self.path, f"{self.problem_id}.hst", 2, hst))
+        return _straighten(_load_ascii_multi(
+            self.path, f"{self.problem_id}.hst", 2, hst, self._restart_dirs))
 
     def wav(self, radius: float, prefix="wav") -> dict:
         """
@@ -147,7 +154,7 @@ class Simulation:
             Dictionary mapping column names to NumPy arrays.
         """
         filename = f"{prefix}_r{radius:.2f}.txt"
-        return _load_ascii_multi(self.path, filename, 1, _read_ascii)
+        return _load_ascii_multi(self.path, filename, 1, _read_ascii, self._restart_dirs)
 
     def tra(self, index: int, prefix="tra") -> dict:
         """
@@ -161,7 +168,7 @@ class Simulation:
             Dictionary mapping column names to NumPy arrays.
         """
         filename = f"{prefix}.ext{index}.txt"
-        return _load_ascii_multi(self.path, filename, 1, _read_ascii)
+        return _load_ascii_multi(self.path, filename, 1, _read_ascii, self._restart_dirs)
 
     def horizon(self, index: int) -> dict:
         """
@@ -174,7 +181,7 @@ class Simulation:
             Dictionary mapping column names to NumPy arrays.
         """
         filename = f"{self.problem_id}.horizon_summary_{index}.txt"
-        return _load_ascii_multi(self.path, filename, 1, _read_ascii)
+        return _load_ascii_multi(self.path, filename, 1, _read_ascii, self._restart_dirs)
 
     @property
     @lru_cache
@@ -189,7 +196,8 @@ class Simulation:
         n_mb_x1 = self.input['meshblock/nx1']
         n_mb_x2 = self.input['meshblock/nx2']
         n_mb_x3 = self.input['meshblock/nx2']
-        return AthdfScraper(self.path, N_B=(n_mb_x1, n_mb_x2, n_mb_x3))
+        return AthdfScraper(
+            self.path, N_B=(n_mb_x1, n_mb_x2, n_mb_x3), source_dirs=self._restart_dirs)
 
     @lru_cache
     def available(self, var:str) -> list:
@@ -278,14 +286,16 @@ class Simulation:
         return anim
 
 
-def _load_ascii_multi(path: str, filename: str, header_lines: int, loader) -> dict:
+def _load_ascii_multi(
+    path: str, filename: str, header_lines: int, loader, restart_dirs=None,
+) -> dict:
     """
     Load an ASCII data file that may be split across restart directories.
 
-    Finds `filename` in each restart directory returned by
-    `find_restart_dirs(path)` (in ascending order) and, if more than one is
-    found, concatenates them into a single temporary file (keeping only the
-    first file's header) before parsing - mirroring the historical external
+    Finds `filename` in each of `restart_dirs` (ascending order; computed via
+    `find_restart_dirs(path)` if not given) and, if more than one is found,
+    concatenates them into a single temporary file (keeping only the first
+    file's header) before parsing - mirroring the historical external
     `combine` script's ascii-append behavior, but without writing anything
     into the simulation directory itself.
 
@@ -296,6 +306,8 @@ def _load_ascii_multi(path: str, filename: str, header_lines: int, loader) -> di
         header_lines: Number of leading header lines to keep only from the
             first file found (dropped from subsequent files).
         loader: Callable taking a file path and returning the parsed dict.
+        restart_dirs: Pre-computed `find_restart_dirs(path)` result, to avoid
+            re-scanning `path` for output-* subdirectories on every call.
 
     Returns:
         The result of `loader` applied to the (possibly concatenated) data.
@@ -303,22 +315,32 @@ def _load_ascii_multi(path: str, filename: str, header_lines: int, loader) -> di
     Raises:
         FileNotFoundError: If `filename` isn't found in any restart directory.
     """
-    paths = [
-        candidate for candidate in
-        (os.path.join(d, filename) for d in find_restart_dirs(path))
-        if os.path.exists(candidate)
-    ]
-    if not paths:
+    dirs = restart_dirs if restart_dirs is not None else find_restart_dirs(path)
+    if len(dirs) == 1:
+        # common case: nothing to merge, go straight to the loader exactly as
+        # for a plain flat output directory (no extra filesystem calls).
+        return loader(os.path.join(dirs[0], filename))
+
+    # Try to open each candidate directly rather than stat-ing first then
+    # opening (halves round trips when most/all restarts have the file).
+    found = []
+    for d in dirs:
+        candidate = os.path.join(d, filename)
+        try:
+            with open(candidate, "r") as f:
+                found.append((candidate, f.readlines()))
+        except FileNotFoundError:
+            continue
+
+    if not found:
         raise FileNotFoundError(f"No file named {filename!r} found under {path!r}")
-    if len(paths) == 1:
-        return loader(paths[0])
+    if len(found) == 1:
+        return loader(found[0][0])
 
     fd, tmp_path = tempfile.mkstemp(suffix=f"_{filename}")
     try:
         with os.fdopen(fd, "w") as out_f:
-            for i, src_path in enumerate(paths):
-                with open(src_path, "r") as in_f:
-                    lines = in_f.readlines()
+            for i, (_, lines) in enumerate(found):
                 out_f.writelines(lines if i == 0 else lines[header_lines:])
         return loader(tmp_path)
     finally:
@@ -369,8 +391,9 @@ def _read_ascii(path: str) -> dict:
             line = f.readline()
     keys = [hh.split(":")[1] for hh in header.split()[1:]]
 
-    # check if file is empty except header
-    if os.path.getsize(path) == len(header):
+    # an empty string means we already hit EOF right after the header while
+    # reading above - reuse that instead of a separate getsize() stat call.
+    if line == '':
         data = np.array([[]]*len(keys))
     else:
         data = np.loadtxt(path, skiprows=1, unpack=True)

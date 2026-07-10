@@ -158,20 +158,29 @@ m, n = split(len(vars))
 fig, axs = plt.subplots(m, n, figsize=(n*7, m*4), sharex=True)
 axs = np.atleast_1d(axs)
 
-if len(sims) > 1:
-    common_path = os.path.commonpath([sim.path for sim in sims])
-else:
-    common_path = os.path.dirname(os.path.dirname(sims[0].path))
+def _label_root(path):
+    # Normalize away a legacy "combine"/"output-XXXX" wrapper directory, so
+    # labels come out the same whether a sim points directly at its
+    # top-level directory or (as before restarts were merged transparently)
+    # at a combine/output-XXXX subdirectory within it.
+    path = path.rstrip('/')
+    base = os.path.basename(path)
+    if base == 'combine' or base.startswith('output-'):
+        return os.path.dirname(path)
+    return path
 
-suffix = ''
-bases = [os.path.basename(sim.path) for sim in sims]
-if all(b == bases[0] for b in bases):
-    suffix = '/' + bases[0]
+label_roots = [_label_root(sim.path) for sim in sims]
+if len(label_roots) > 1:
+    common_path = os.path.commonpath(label_roots)
+else:
+    common_path = os.path.dirname(label_roots[0])
+sim_labels = {sim.path: root.replace(common_path, '').strip('/')
+              for sim, root in zip(sims, label_roots)}
 
 
 for var, ax in zip(vars, axs.flat):
     for sim, c in zip(sims, args.colors):
-        name = sim.path.replace(common_path, '').strip('/').replace(suffix, '')
+        name = sim_labels[sim.path]
         try:
             if isinstance(var, list):
                 for v, ls in zip(var, ('-', '--', ':', '-.')):
