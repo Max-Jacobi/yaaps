@@ -1,0 +1,137 @@
+# Standard analysis suite for a single simulation, translated from
+# fabio_fork's analyze.sh / combine.py / plot_hst.py / parallel_anim.py
+# pipeline into one batch_plots TOML config.
+#
+# Differences from the original bash pipeline:
+#  - No separate `combine.py` step is needed: point --sims directly at the
+#    simulation's top-level directory (the one containing output-0000/,
+#    output-0001/, ...) and restart merging happens automatically.
+#  - analyze.sh loops every 2D variable over BOTH the xy and xz planes.
+#    That doesn't actually match how GRAthena++ output blocks are usually
+#    configured here: each physics module's 2D diagnostic output is
+#    typically sliced in exactly ONE plane (via x2_slice/x3_slice in the
+#    <outputN> block of the .par/.inp/.rst file), not both. Checked
+#    against a real run's parfile:
+#       hydro         (x3_slice) -> xy   (rho)
+#       passive_scalars (x2_slice) -> xz (ye)
+#       B             (x2_slice) -> xz   (B_x, B_y, B_z)
+#       M1.lab/rad/radmat/lab_aux (x3_slice) -> xy  (all M1 quantities)
+#    so each group below uses a single, specific plane rather than being
+#    duplicated across both. VERIFY THIS AGAINST YOUR OWN RUN'S PARFILE
+#    before trusting it blindly - other runs may be configured differently.
+#    Quick check: `sim.scrape.debug_data_keys()` or `sim.available(var)`
+#    tells you which plane(s) a variable actually has data for.
+#  - The M1 neutrino variables are grouped by physical quantity (one
+#    multi-panel animation per quantity, one panel per species e/ae/x)
+#    instead of one animation per variable - far fewer output files,
+#    easier to compare species side by side.
+#  - Per-variable colormap/norm/log-scaling defaults (e.g. for all the M1
+#    quantities) are picked up automatically from
+#    yaaps.decorations._color_kwargs_default - no need to repeat them here
+#    unless you want to override a specific variable.
+#  - Missing/not-yet-produced data no longer crashes the run: a variable
+#    that doesn't exist, or a sim that hasn't reached a requested time yet,
+#    just leaves that one panel blank (with a single clustered warning,
+#    not one per frame). A frame/plot is only skipped entirely if every
+#    panel in it would be blank.
+#
+# Run with:
+#   python -m yaaps.batch_plots \
+#       --sims /path/to/sim \
+#       --output-dir ./analysis \
+#       --config analyze_config.toml \
+#       --cpus 8
+
+# ===========================================================================
+# 1D diagnostics (history file line plots)
+# ===========================================================================
+
+[hydro_hist]
+type = "hst"
+vars = ["max_rho", "max_T", "tot-E"]
+
+[ejecta_hist]
+type = "hst"
+vars = ["m_ej_bern"]
+
+[gr_hist]
+type = "hst"
+vars = ["min_alpha", "C-norm2", "mass", "num_c2p_fail"]
+
+[bfield_hist]
+type = "hst"
+vars = ["max_B2", "div_B"]
+[bfield_hist.funcs]
+div_B = "abs"
+
+[nu_number_hist]
+type = "hst"
+# comma-separated -> all three species combined into one subplot
+vars = ["max_sc_nG_00,max_sc_nG_01,max_sc_nG_02"]
+
+[nu_energy_hist]
+type = "hst"
+vars = ["max_sc_E_00,max_sc_E_01,max_sc_E_02"]
+
+# ===========================================================================
+# 2D snapshots, animated over time.
+# Uncomment `boundary = <value>` in any section below to zoom in - unset
+# means the full domain, matching analyze.sh's default.
+# ===========================================================================
+
+[hydro_snapshot]
+type = "sim_combined_anim"
+var = "rho"
+sampling = "xy"
+# boundary = 100.0
+
+[ye_snapshot]
+type = "sim_combined_anim"
+var = "ye"
+sampling = "xz"
+# boundary = 100.0
+
+# --- magnetic field components ------------------------------------------
+
+[bfield_snapshot]
+type = "var_combined_anim"
+vars = ["B_x", "B_y", "B_z"]
+sampling = "xz"
+
+# --- M1 neutrino quantities (one multi-panel animation per quantity, ----
+# --- one panel per species: e, ae, x) ------------------------------------
+
+[nu_n_snapshot]
+type = "var_combined_anim"
+vars = ["m1_n_e", "m1_n_ae", "m1_n_x"]
+sampling = "xy"
+
+[nu_J_snapshot]
+type = "var_combined_anim"
+vars = ["m1_J_e", "m1_J_ae", "m1_J_x"]
+sampling = "xy"
+
+[nu_eta0_snapshot]
+type = "var_combined_anim"
+vars = ["m1_eta_0_e", "m1_eta_0_ae", "m1_eta_0_x"]
+sampling = "xy"
+
+[nu_eta1_snapshot]
+type = "var_combined_anim"
+vars = ["m1_eta_1_e", "m1_eta_1_ae", "m1_eta_1_x"]
+sampling = "xy"
+
+[nu_kappa0_snapshot]
+type = "var_combined_anim"
+vars = ["m1_kappa_0_e", "m1_kappa_0_ae", "m1_kappa_0_x"]
+sampling = "xy"
+
+[nu_kappa1_snapshot]
+type = "var_combined_anim"
+vars = ["m1_kappa_1_e", "m1_kappa_1_ae", "m1_kappa_1_x"]
+sampling = "xy"
+
+[nu_scat_snapshot]
+type = "var_combined_anim"
+vars = ["m1_scat_1_e", "m1_scat_1_ae", "m1_scat_1_x"]
+sampling = "xy"

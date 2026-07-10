@@ -28,6 +28,7 @@ import multiprocessing
 import os
 import subprocess
 import sys
+from collections import Counter
 from math import isqrt
 from typing import Any, Callable
 
@@ -155,6 +156,141 @@ def _get_times_for_sim(
     return times
 
 
+# Warning key -> message. Keyed on things that stay stable across frames
+# (sim/var/reason), never on the per-frame time itself, so that a
+# multi-hundred-frame animation clusters into one warning per cause instead
+# of flooding the log with one line per timestep.
+WarningKey = tuple
+Warning_ = tuple[WarningKey, str]
+
+
+def _blank_axis(ax: plt.Axes, title: str | None = None) -> None:
+    """Leave an axis empty (no plot) but clearly marked as intentionally so."""
+    ax.text(0.5, 0.5, "no data", ha="center", va="center",
+            transform=ax.transAxes, color="gray", fontsize=9)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    if title:
+        ax.set_title(title)
+
+
+def _safe_color_plot(
+    sim: ya.Simulation,
+    ax: plt.Axes,
+    plot_kwargs: dict[str, Any],
+    time: float,
+    contour_cfg: Any = None,
+    contour_sampling: str | None = None,
+    formatter_mode: str = "raw",
+    boundary: float | None = None,
+) -> Warning_ | None:
+    """
+    Plot one variable into `ax` at `time`, or leave it blank if the
+    variable doesn't exist for this sim, or this sim hasn't produced data
+    covering `time` yet (rather than silently falling back to the nearest
+    available - possibly very different - iteration).
+
+    Returns a (key, message) warning tuple on failure, or None on success.
+    """
+    var = plot_kwargs["var"]
+    sampling = plot_kwargs["sampling"]
+
+    try:
+        data = Native(sim, var, sampling)
+    except (ValueError, KeyError) as exc:
+        _blank_axis(ax, title=sim.name)
+        return (
+            (sim.name, var, "missing"),
+            f"[{sim.name}] variable {var!r} not available for sampling {sampling}: {exc}",
+        )
+
+    times = data.time_range
+    in_range = len(times) > 0 and times.min() <= time <= times.max()
+    if not in_range:
+        _blank_axis(ax, title=sim.name)
+        rng = "no data" if len(times) == 0 else f"[{times.min():.4g}, {times.max():.4g}]"
+        return (
+            (sim.name, var, "out_of_range"),
+            f"[{sim.name}] {var!r} has no data covering requested times "
+            f"(available range: {rng})",
+        )
+
+    color_plot = yp.NativeColorPlot(sim=sim, **plot_kwargs)
+    color_plot.plot(time)
+
+    if contour_cfg is not None:
+        try:
+            contour_plots = _build_contour_plots(
+                sim, ax, contour_cfg, formatter_mode, contour_sampling
+            )
+            for cp in contour_plots:
+                cp.plot(time)
+        except (ValueError, KeyError):
+            # Missing contour overlay data shouldn't blank an otherwise-good
+            # panel; just skip the overlay for this frame.
+            pass
+
+    if boundary is not None:
+        ax.set_xlim(-boundary, boundary)
+        ax.set_ylim(-boundary, boundary)
+
+    return None
+
+
+def _print_clustered_warnings(warnings: list[Warning_]) -> None:
+    """Print one summary line per unique warning key, with an occurrence count."""
+    if not warnings:
+        return
+    counts: Counter[WarningKey] = Counter()
+    messages: dict[WarningKey, str] = {}
+    for key, message in warnings:
+        counts[key] += 1
+        messages[key] = message
+    for key, n in counts.items():
+        suffix = f" ({n}x)" if n > 1 else ""
+        print(f"  WARNING: {messages[key]}{suffix}", file=sys.stderr)
+
+
+def _collect_frame_results(
+    results: list[tuple[str | None, list[Warning_]]],
+) -> tuple[list[str], list[Warning_]]:
+    """Split (fname_or_None, warnings) results into valid filenames + all warnings."""
+    valid = [fname for fname, _ in results if fname is not None]
+    all_warnings = [w for _, warnings in results for w in warnings]
+    return valid, all_warnings
+
+
+def _assemble_mp4(frames_dir: str, output_mp4: str, fps: str) -> bool:
+    """
+    Assemble PNG frames in `frames_dir` into an mp4 via ffmpeg.
+
+    Uses a glob pattern rather than a sequential frame_%06d.png pattern, so
+    gaps left by skipped/all-blank frames don't break the input sequence
+    (frame numbers no longer need to be contiguous).
+    """
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-framerate", str(fps),
+                "-pattern_type", "glob",
+                "-i", os.path.join(frames_dir, "frame_*.png"),
+                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-crf", "18",
+                "-movflags", "+faststart",
+                output_mp4,
+            ],
+            check=True,
+            stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+        )
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Plot type: hst (history)
 # ---------------------------------------------------------------------------
@@ -210,33 +346,68 @@ def _plot_hst(
     fig, axs = plt.subplots(m, n, figsize=figsize, sharex=True)
     axs = np.atleast_1d(axs)
 
-    if len(sims) > 1:
-        common_path = os.path.commonpath([sim.path for sim in sims])
-    else:
-        common_path = os.path.dirname(os.path.dirname(sims[0].path))
+    # Normalize away a legacy "combine"/"output-XXXX" wrapper directory, so
+    # labels come out the same whether a sim points directly at its
+    # top-level directory or (as before restarts were merged transparently)
+    # at a combine/output-XXXX subdirectory within it.
+    def _label_root(path: str) -> str:
+        path = path.rstrip("/")
+        base = os.path.basename(path)
+        if base == "combine" or base.startswith("output-"):
+            return os.path.dirname(path)
+        return path
 
-    suffix = ""
-    bases = [os.path.basename(sim.path) for sim in sims]
-    if all(b == bases[0] for b in bases):
-        suffix = "/" + bases[0]
+    label_roots = [_label_root(sim.path) for sim in sims]
+    if len(label_roots) > 1:
+        common_path = os.path.commonpath(label_roots)
+    else:
+        common_path = os.path.dirname(label_roots[0])
+    sim_labels = {sim.path: root.replace(common_path, "").strip("/")
+                  for sim, root in zip(sims, label_roots)}
+
+    warnings: list[Warning_] = []
+    subplot_has_data: list[bool] = []
 
     for var, ax in zip(parsed_vars, axs.flat):
+        any_line = False
         for sim, c in zip(sims, colors):
-            name = sim.path.replace(common_path, "").strip("/").replace(suffix, "")
+            name = sim_labels[sim.path]
             if isinstance(var, list):
                 for v, ls in zip(var, ("-", "--", ":", "-.")):
                     label = v if sim is sims[0] else None
-                    src = sim.hst
-                    data = src[v]
+                    try:
+                        src = sim.hst
+                        data = src[v]
+                    except (FileNotFoundError, KeyError) as exc:
+                        warnings.append((
+                            (sim.name, v, "hst_missing"),
+                            f"[{sim.name}] hst column {v!r} not available: {exc}",
+                        ))
+                        continue
                     if v in funcs and funcs[v] is not None:
                         data = funcs[v](data)
                     ax.plot(src[xvar], data, c=c, ls=ls, label=label)
+                    any_line = True
             else:
-                src = sim.hst
-                data = src[var]
+                try:
+                    src = sim.hst
+                    data = src[var]
+                except (FileNotFoundError, KeyError) as exc:
+                    warnings.append((
+                        (sim.name, var, "hst_missing"),
+                        f"[{sim.name}] hst column {var!r} not available: {exc}",
+                    ))
+                    continue
                 if var in funcs and funcs[var] is not None:
                     data = funcs[var](data)
                 ax.plot(src[xvar], data, c=c, label=name)
+                any_line = True
+        subplot_has_data.append(any_line)
+
+        if not any_line:
+            _blank_axis(ax, title=var if isinstance(var, str) else " ".join(var))
+            continue
+
         ax.set_xlabel(xvar)
 
         if isinstance(var, list):
@@ -254,9 +425,18 @@ def _plot_hst(
             if var in ylog_vars or (not no_auto_log and var in auto_log_keys):
                 ax.set_yscale("log")
 
+    _print_clustered_warnings(warnings)
+
+    if not any(subplot_has_data):
+        print(f"  WARNING: [{section_name}] all subplots blank, skipping plot.", file=sys.stderr)
+        plt.close(fig)
+        return
+
     # Legends and limits
     sim_legend_exists = False
-    for var, ax in zip(parsed_vars, axs.flat):
+    for var, ax, has_data in zip(parsed_vars, axs.flat, subplot_has_data):
+        if not has_data:
+            continue
         if isinstance(var, list):
             ax.legend()
         elif not sim_legend_exists:
@@ -290,7 +470,7 @@ def _plot_hst(
 # Plot type: sim_combined (grid of sims, one per subplot)
 # ---------------------------------------------------------------------------
 
-def _render_sim_combined_frame(args_tuple: tuple) -> str:
+def _render_sim_combined_frame(args_tuple: tuple) -> tuple[str | None, list[Warning_]]:
     """Render a single sim-combined frame (for use in pool or serial)."""
     (sims_paths, var, time, sampling, boundary, cfg, output_dir, name_prefix) = args_tuple
 
@@ -312,6 +492,8 @@ def _render_sim_combined_frame(args_tuple: tuple) -> str:
 
     fig, axs = plt.subplots(rows, cols, figsize=figsize, squeeze=False)
 
+    warnings: list[Warning_] = []
+    any_data = False
     for idx, sim_path in enumerate(sims_paths):
         sim = ya.Simulation(sim_path)
         ax = axs.flat[idx]
@@ -333,26 +515,24 @@ def _render_sim_combined_frame(args_tuple: tuple) -> str:
         if vmax is not None:
             plot_kwargs["vmax"] = vmax
 
-        color_plot = yp.NativeColorPlot(sim=sim, **plot_kwargs)
-        color_plot.plot(time)
-
-        # Contour overlay
-        if contour_cfg is not None:
-            contour_plots = _build_contour_plots(
-                sim, ax, contour_cfg, formatter_mode, sampling
-            )
-            for cp in contour_plots:
-                cp.plot(time)
-
-        if boundary is not None:
-            ax.set_xlim(-boundary, boundary)
-            ax.set_ylim(-boundary, boundary)
-
-        ax.set_title(f"{sim.name}\n{ax.get_title()}")
+        warning = _safe_color_plot(
+            sim, ax, plot_kwargs, time,
+            contour_cfg=contour_cfg, contour_sampling=sampling,
+            formatter_mode=formatter_mode, boundary=boundary,
+        )
+        if warning is not None:
+            warnings.append(warning)
+        else:
+            any_data = True
+            ax.set_title(f"{sim.name}\n{ax.get_title()}")
 
     # Hide unused axes
     for idx in range(n_sims, rows * cols):
         axs.flat[idx].set_visible(False)
+
+    if not any_data:
+        plt.close(fig)
+        return None, warnings
 
     plt.tight_layout()
     fname = os.path.join(output_dir, f"{name_prefix}.pdf")
@@ -361,7 +541,7 @@ def _render_sim_combined_frame(args_tuple: tuple) -> str:
     fname_png = os.path.join(output_dir, f"{name_prefix}.png")
     fig.savefig(fname_png, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
-    return fname
+    return fname, warnings
 
 
 def _plot_sim_combined(
@@ -404,14 +584,19 @@ def _plot_sim_combined(
     else:
         results = [_render_sim_combined_frame(t) for t in tasks]
 
-    print(f"  Saved {len(results)} plots to {os.path.join(output_dir, section_name)}/")
+    valid, warnings = _collect_frame_results(results)
+    _print_clustered_warnings(warnings)
+    skipped = len(results) - len(valid)
+    if skipped:
+        print(f"  {skipped} plot(s) skipped entirely (all panels blank).", file=sys.stderr)
+    print(f"  Saved {len(valid)} plots to {os.path.join(output_dir, section_name)}/")
 
 
 # ---------------------------------------------------------------------------
 # Plot type: var_combined (multiple vars in one figure per time/sim)
 # ---------------------------------------------------------------------------
 
-def _render_var_combined_frame(args_tuple: tuple) -> str:
+def _render_var_combined_frame(args_tuple: tuple) -> tuple[str | None, list[Warning_]]:
     """Render a single var-combined frame."""
     (sim_path, variables, time, sampling, boundary, cfg, output_dir, name_prefix) = args_tuple
 
@@ -429,6 +614,8 @@ def _render_var_combined_frame(args_tuple: tuple) -> str:
     fig, axs = plt.subplots(rows, cols, figsize=figsize, squeeze=False)
     sim = ya.Simulation(sim_path)
 
+    warnings: list[Warning_] = []
+    any_data = False
     for idx, var_cfg in enumerate(variables):
         ax = axs.flat[idx]
 
@@ -444,10 +631,11 @@ def _render_var_combined_frame(args_tuple: tuple) -> str:
         norm = var_opts.get("norm", cfg.get("norm"))
         vmin = var_opts.get("vmin", cfg.get("vmin"))
         vmax = var_opts.get("vmax", cfg.get("vmax"))
+        var_sampling = var_opts.get("sampling", sampling)
 
         plot_kwargs: dict[str, Any] = dict(
             var=var_name,
-            sampling=var_opts.get("sampling", sampling),
+            sampling=var_sampling,
             func=func,
             draw_meshblocks=meshblocks,
             ax=ax,
@@ -462,26 +650,24 @@ def _render_var_combined_frame(args_tuple: tuple) -> str:
         if vmax is not None:
             plot_kwargs["vmax"] = vmax
 
-        color_plot = yp.NativeColorPlot(sim=sim, **plot_kwargs)
-        color_plot.plot(time)
-
-        # Per-variable contour
         var_contour = var_opts.get("contour", contour_cfg)
-        if var_contour is not None:
-            contour_plots = _build_contour_plots(
-                sim, ax, var_contour, formatter_mode,
-                var_opts.get("sampling", sampling),
-            )
-            for cp in contour_plots:
-                cp.plot(time)
-
-        if boundary is not None:
-            ax.set_xlim(-boundary, boundary)
-            ax.set_ylim(-boundary, boundary)
+        warning = _safe_color_plot(
+            sim, ax, plot_kwargs, time,
+            contour_cfg=var_contour, contour_sampling=var_sampling,
+            formatter_mode=formatter_mode, boundary=boundary,
+        )
+        if warning is not None:
+            warnings.append(warning)
+        else:
+            any_data = True
 
     # Hide unused axes
     for idx in range(n_vars, rows * cols):
         axs.flat[idx].set_visible(False)
+
+    if not any_data:
+        plt.close(fig)
+        return None, warnings
 
     plt.tight_layout()
     fname = os.path.join(output_dir, f"{name_prefix}.pdf")
@@ -489,7 +675,7 @@ def _render_var_combined_frame(args_tuple: tuple) -> str:
     fname_png = os.path.join(output_dir, f"{name_prefix}.png")
     fig.savefig(fname_png, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
-    return fname
+    return fname, warnings
 
 
 def _plot_var_combined(
@@ -530,7 +716,12 @@ def _plot_var_combined(
     else:
         results = [_render_var_combined_frame(t) for t in tasks]
 
-    print(f"  Saved {len(results)} plots to {os.path.join(output_dir, section_name)}/")
+    valid, warnings = _collect_frame_results(results)
+    _print_clustered_warnings(warnings)
+    skipped = len(results) - len(valid)
+    if skipped:
+        print(f"  {skipped} plot(s) skipped entirely (all panels blank).", file=sys.stderr)
+    print(f"  Saved {len(valid)} plots to {os.path.join(output_dir, section_name)}/")
 
 
 # ---------------------------------------------------------------------------
@@ -550,7 +741,7 @@ def _sim_anim_worker_init(sim_paths: list[str], cfg: dict[str, Any]) -> None:
     _anim_sim_cfg = cfg
 
 
-def _sim_anim_render_frame(task: tuple[int, float]) -> str:
+def _sim_anim_render_frame(task: tuple[int, float]) -> tuple[str | None, list[Warning_]]:
     """Render one frame of a sim-combined animation."""
     frame_idx, time = task
     cfg = _anim_sim_cfg
@@ -577,6 +768,8 @@ def _sim_anim_render_frame(task: tuple[int, float]) -> str:
 
     fig, axs = plt.subplots(rows, cols, figsize=figsize, squeeze=False)
 
+    warnings: list[Warning_] = []
+    any_data = False
     for idx, sim in enumerate(sims):
         ax = axs.flat[idx]
         plot_kwargs: dict[str, Any] = dict(
@@ -596,30 +789,29 @@ def _sim_anim_render_frame(task: tuple[int, float]) -> str:
         if vmax is not None:
             plot_kwargs["vmax"] = vmax
 
-        color_plot = yp.NativeColorPlot(sim=sim, **plot_kwargs)
-        color_plot.plot(time)
-
-        if contour_cfg is not None:
-            contour_plots = _build_contour_plots(
-                sim, ax, contour_cfg, formatter_mode, sampling
-            )
-            for cp in contour_plots:
-                cp.plot(time)
-
-        if boundary is not None:
-            ax.set_xlim(-boundary, boundary)
-            ax.set_ylim(-boundary, boundary)
-
-        ax.set_title(f"{sim.name}\n{ax.get_title()}")
+        warning = _safe_color_plot(
+            sim, ax, plot_kwargs, time,
+            contour_cfg=contour_cfg, contour_sampling=sampling,
+            formatter_mode=formatter_mode, boundary=boundary,
+        )
+        if warning is not None:
+            warnings.append(warning)
+        else:
+            any_data = True
+            ax.set_title(f"{sim.name}\n{ax.get_title()}")
 
     for idx in range(n_sims, rows * cols):
         axs.flat[idx].set_visible(False)
+
+    if not any_data:
+        plt.close(fig)
+        return None, warnings
 
     plt.tight_layout()
     fname = os.path.join(cfg["output_dir"], f"frame_{frame_idx:06d}.png")
     fig.savefig(fname, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
-    return fname
+    return fname, warnings
 
 
 def _anim_sim_combined(
@@ -640,11 +832,20 @@ def _anim_sim_combined(
     time_every = cfg.get("time_every", 1)
     fps = str(cfg.get("fps", 24))
 
-    # Get union of all sim times
+    # Get union of all sim times (skip sims that don't have this variable at
+    # all rather than crashing the whole animation; per-frame rendering
+    # will still leave those sims' panels blank for whatever times remain).
     all_times = []
     for sim in sims:
-        data = Native(sim, var, sampling)
+        try:
+            data = Native(sim, var, sampling)
+        except (ValueError, KeyError) as exc:
+            print(f"  WARNING: [{sim.name}] variable {var!r} not available: {exc}", file=sys.stderr)
+            continue
         all_times.append(data.time_range)
+    if not all_times:
+        print(f"  WARNING: No sim has variable {var!r}; skipping {section_name}.", file=sys.stderr)
+        return
     times = np.unique(np.concatenate(all_times))
 
     if time_min is not None:
@@ -678,30 +879,23 @@ def _anim_sim_combined(
         _sim_anim_worker_init(sim_paths, cfg)
         results = [_sim_anim_render_frame(t) for t in tasks]
 
-    # Create MP4
+    valid, warnings = _collect_frame_results(results)
+    _print_clustered_warnings(warnings)
+    skipped = len(results) - len(valid)
+    if skipped:
+        print(f"  {skipped} frame(s) skipped entirely (all panels blank).", file=sys.stderr)
+
+    if not valid:
+        print(f"  WARNING: all frames blank for [{section_name}]; no video created.", file=sys.stderr)
+        return
+
     output_mp4 = os.path.join(output_dir, section_name, f"{section_name}.mp4")
-    try:
-        subprocess.run(
-            [
-                "ffmpeg", "-y",
-                "-framerate", str(fps),
-                "-i", os.path.join(frames_dir, "frame_%06d.png"),
-                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                "-c:v", "libx264",
-                "-pix_fmt", "yuv420p",
-                "-crf", "18",
-                "-movflags", "+faststart",
-                output_mp4,
-            ],
-            check=True,
-            stderr=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-        )
+    if _assemble_mp4(frames_dir, output_mp4, fps):
         print(f"  Created: {output_mp4}")
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    else:
         print(f"  WARNING: ffmpeg failed; frames saved in {frames_dir}")
 
-    print(f"  Saved {len(results)} frames to {frames_dir}/")
+    print(f"  Saved {len(valid)} frames to {frames_dir}/")
 
 
 # ---------------------------------------------------------------------------
@@ -720,7 +914,7 @@ def _var_anim_worker_init(sim_path: str, cfg: dict[str, Any]) -> None:
     _anim_var_cfg = cfg
 
 
-def _var_anim_render_frame(task: tuple[int, float]) -> str:
+def _var_anim_render_frame(task: tuple[int, float]) -> tuple[str | None, list[Warning_]]:
     """Render one frame of a var-combined animation."""
     frame_idx, time = task
     cfg = _anim_var_cfg
@@ -742,6 +936,8 @@ def _var_anim_render_frame(task: tuple[int, float]) -> str:
 
     fig, axs = plt.subplots(rows, cols, figsize=figsize, squeeze=False)
 
+    warnings: list[Warning_] = []
+    any_data = False
     for idx, var_cfg in enumerate(variables):
         ax = axs.flat[idx]
 
@@ -757,10 +953,11 @@ def _var_anim_render_frame(task: tuple[int, float]) -> str:
         norm_val = var_opts.get("norm", cfg.get("norm"))
         vmin = var_opts.get("vmin", cfg.get("vmin"))
         vmax = var_opts.get("vmax", cfg.get("vmax"))
+        var_sampling = var_opts.get("sampling", sampling)
 
         plot_kwargs: dict[str, Any] = dict(
             var=var_name,
-            sampling=var_opts.get("sampling", sampling),
+            sampling=var_sampling,
             func=func,
             draw_meshblocks=meshblocks,
             ax=ax,
@@ -775,30 +972,29 @@ def _var_anim_render_frame(task: tuple[int, float]) -> str:
         if vmax is not None:
             plot_kwargs["vmax"] = vmax
 
-        color_plot = yp.NativeColorPlot(sim=sim, **plot_kwargs)
-        color_plot.plot(time)
-
         var_contour = var_opts.get("contour", contour_cfg)
-        if var_contour is not None:
-            contour_plots = _build_contour_plots(
-                sim, ax, var_contour, formatter_mode,
-                var_opts.get("sampling", sampling),
-            )
-            for cp in contour_plots:
-                cp.plot(time)
-
-        if boundary is not None:
-            ax.set_xlim(-boundary, boundary)
-            ax.set_ylim(-boundary, boundary)
+        warning = _safe_color_plot(
+            sim, ax, plot_kwargs, time,
+            contour_cfg=var_contour, contour_sampling=var_sampling,
+            formatter_mode=formatter_mode, boundary=boundary,
+        )
+        if warning is not None:
+            warnings.append(warning)
+        else:
+            any_data = True
 
     for idx in range(n_vars, rows * cols):
         axs.flat[idx].set_visible(False)
+
+    if not any_data:
+        plt.close(fig)
+        return None, warnings
 
     plt.tight_layout()
     fname = os.path.join(cfg["output_dir"], f"frame_{frame_idx:06d}.png")
     fig.savefig(fname, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
-    return fname
+    return fname, warnings
 
 
 def _anim_var_combined(
@@ -819,7 +1015,12 @@ def _anim_var_combined(
     first_var = variables[0] if isinstance(variables[0], str) else variables[0]["var"]
 
     for sim in sims:
-        data = Native(sim, first_var, sampling)
+        try:
+            data = Native(sim, first_var, sampling)
+        except (ValueError, KeyError) as exc:
+            print(f"  WARNING: [{sim.name}] variable {first_var!r} not available, "
+                  f"skipping this sim for {section_name}: {exc}", file=sys.stderr)
+            continue
         times = data.time_range
         if time_min is not None:
             times = times[times >= time_min]
@@ -852,32 +1053,27 @@ def _anim_var_combined(
             _var_anim_worker_init(sim.path, cfg_copy)
             results = [_var_anim_render_frame(t) for t in tasks]
 
-        # Create MP4
+        valid, warnings = _collect_frame_results(results)
+        _print_clustered_warnings(warnings)
+        skipped = len(results) - len(valid)
+        if skipped:
+            print(f"  [{sim.name}] {skipped} frame(s) skipped entirely (all panels blank).",
+                  file=sys.stderr)
+
+        if not valid:
+            print(f"  WARNING: [{sim.name}] all frames blank for {section_name}; "
+                  "no video created.", file=sys.stderr)
+            continue
+
         output_mp4 = os.path.join(
             output_dir, section_name, sim.name, f"{section_name}.mp4"
         )
-        try:
-            subprocess.run(
-                [
-                    "ffmpeg", "-y",
-                    "-framerate", str(fps),
-                    "-i", os.path.join(frames_dir, "frame_%06d.png"),
-                    "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                    "-c:v", "libx264",
-                    "-pix_fmt", "yuv420p",
-                    "-crf", "18",
-                    "-movflags", "+faststart",
-                    output_mp4,
-                ],
-                check=True,
-                stderr=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-            )
+        if _assemble_mp4(frames_dir, output_mp4, fps):
             print(f"  Created: {output_mp4}")
-        except (subprocess.CalledProcessError, FileNotFoundError):
+        else:
             print(f"  WARNING: ffmpeg failed; frames saved in {frames_dir}")
 
-        print(f"  [{sim.name}] Saved {len(results)} frames.")
+        print(f"  [{sim.name}] Saved {len(valid)} frames.")
 
 
 # ---------------------------------------------------------------------------
@@ -960,10 +1156,19 @@ def main() -> None:
         print(f"Processing [{section_name}] (type={plot_type})...")
 
         handler = PLOT_TYPES[plot_type]
-        if plot_type == "hst":
-            handler(sims, args.output_dir, section_name, section_cfg)
-        else:
-            handler(sims, args.output_dir, section_name, section_cfg, args.cpus)
+        try:
+            if plot_type == "hst":
+                handler(sims, args.output_dir, section_name, section_cfg)
+            else:
+                handler(sims, args.output_dir, section_name, section_cfg, args.cpus)
+        except Exception as exc:  # noqa: BLE001
+            # A single misconfigured/missing-data section shouldn't take
+            # down every other section in the run.
+            print(
+                f"WARNING: [{section_name}] failed unexpectedly, skipping: "
+                f"{type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
 
 
 if __name__ == "__main__":
