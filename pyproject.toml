@@ -18,8 +18,10 @@ dependencies = [
     "h5py",
     "matplotlib",
     "tqdm",
-    "simtroller",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest"]
 
 [tool.setuptools]
 include-package-data = true

@@ -180,9 +180,8 @@ class Native(MeshData):
         super().__init__(sim, var, sampling)
         self.var, self.ghosts = sim.complete_var(var, self.sampling)
 
-        self.iter_range = np.arange(*sim.scrape.get_iter_range(self.var, self.sampling))
-        out = sim.scrape.get_var_info(self.var, self.sampling)[0]
-        self.time_range = np.array([sim.scrape.get_iter_time(out, it) for it in self.iter_range])
+        self.iter_range = sim.scrape.get_available_iters(self.var, self.sampling)
+        self.time_range = sim.scrape.get_available_times(self.var, self.sampling)
 
     @lru_cache(maxsize=1)
     def load_data(self, time: float, strip_ghosts: bool = True) -> tuple:

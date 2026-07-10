@@ -8,14 +8,13 @@ parameter files, history files, waveform data, tracer particles, and 2D plots.
 
 import os
 import json
+import tempfile
 from typing import Optional, Iterable
 from functools import lru_cache
 
 import numpy as np
 
-from simtroller.extensions.gra import scrape_dir_athdf
-
-
+from .scrape import AthdfScraper, find_restart_dirs
 from .input import Input
 from .athena_read import hst
 from .plot2D import NativeColorPlot
@@ -31,7 +30,12 @@ class Simulation:
     data, and creating 2D visualizations.
 
     Args:
-        path: Path to the simulation output directory.
+        path: Path to the simulation output directory. May be a single flat
+            output directory, or a top-level directory containing restart
+            subdirectories (output-0000, output-0001, ...) as produced when
+            a run is resumed from a checkpoint - restarts are merged
+            transparently (newer restart wins on overlapping iterations/
+            timesteps), no separate combine step is required.
         input_path: Optional explicit path to the input/parameter file.
             If not provided, searches for .inp or .par files in the directory.
 
@@ -69,13 +73,21 @@ class Simulation:
         else:
             self.name = path_split[-1]
         if input_path is None:
-            for file in os.listdir(path):
-                if any(file.endswith(end) for end in (".rst", ".inp", ".par")):
-                    try:
-                        self.input = Input(os.path.join(path, file))
-                        break
-                    except ValueError:
-                        ...
+            # search restart directories (output-0000, output-0001, ...) in
+            # ascending order if present, else the directory itself, mirroring
+            # the historical external `combine` script's "first restart that
+            # has it" behavior.
+            for restart_dir in find_restart_dirs(self.path):
+                for file in os.listdir(restart_dir):
+                    if any(file.endswith(end) for end in (".rst", ".inp", ".par")):
+                        try:
+                            self.input = Input(os.path.join(restart_dir, file))
+                            break
+                        except ValueError:
+                            ...
+                else:
+                    continue
+                break
             else:
                 raise FileNotFoundError("Could not find valid parfile")
         else:
@@ -113,11 +125,15 @@ class Simulation:
         """
         Load and return the history (.hst) file data.
 
+        If the simulation is spread across restart directories, the
+        per-restart .hst files are concatenated (in restart order) before
+        parsing, so history spanning multiple restarts loads as one series.
+
         Returns:
             Dictionary mapping column names to NumPy arrays of values,
             sorted by iteration or time to remove duplicate entries.
         """
-        return _straighten(hst(f"{self.path}/{self.problem_id}.hst"))
+        return _straighten(_load_ascii_multi(self.path, f"{self.problem_id}.hst", 2, hst))
 
     def wav(self, radius: float, prefix="wav") -> dict:
         """
@@ -130,8 +146,8 @@ class Simulation:
         Returns:
             Dictionary mapping column names to NumPy arrays.
         """
-        path = f"{self.path}/{prefix}_r{radius:.2f}.txt"
-        return _read_ascii(path)
+        filename = f"{prefix}_r{radius:.2f}.txt"
+        return _load_ascii_multi(self.path, filename, 1, _read_ascii)
 
     def tra(self, index: int, prefix="tra") -> dict:
         """
@@ -144,8 +160,8 @@ class Simulation:
         Returns:
             Dictionary mapping column names to NumPy arrays.
         """
-        path = f"{self.path}/{prefix}.ext{index}.txt"
-        return _read_ascii(path)
+        filename = f"{prefix}.ext{index}.txt"
+        return _load_ascii_multi(self.path, filename, 1, _read_ascii)
 
     def horizon(self, index: int) -> dict:
         """
@@ -157,23 +173,23 @@ class Simulation:
         Returns:
             Dictionary mapping column names to NumPy arrays.
         """
-        path = f"{self.path}/{self.problem_id}.horizon_summary_{index}.txt"
-        return _read_ascii(path)
+        filename = f"{self.problem_id}.horizon_summary_{index}.txt"
+        return _load_ascii_multi(self.path, filename, 1, _read_ascii)
 
     @property
     @lru_cache
-    def scrape(self) -> scrape_dir_athdf:
+    def scrape(self) -> AthdfScraper:
         """
         Get the directory scraper for accessing athdf output files.
 
         Returns:
-            A scrape_dir_athdf object configured for this simulation's
+            An AthdfScraper object configured for this simulation's
             meshblock structure.
         """
         n_mb_x1 = self.input['meshblock/nx1']
         n_mb_x2 = self.input['meshblock/nx2']
         n_mb_x3 = self.input['meshblock/nx2']
-        return scrape_dir_athdf(self.path, N_B=(n_mb_x1, n_mb_x2, n_mb_x3))
+        return AthdfScraper(self.path, N_B=(n_mb_x1, n_mb_x2, n_mb_x3))
 
     @lru_cache
     def available(self, var:str) -> list:
@@ -260,6 +276,53 @@ class Simulation:
         plot = NativeColorPlot(self, *args, **kwargs)
         anim = plot.animate(times)
         return anim
+
+
+def _load_ascii_multi(path: str, filename: str, header_lines: int, loader) -> dict:
+    """
+    Load an ASCII data file that may be split across restart directories.
+
+    Finds `filename` in each restart directory returned by
+    `find_restart_dirs(path)` (in ascending order) and, if more than one is
+    found, concatenates them into a single temporary file (keeping only the
+    first file's header) before parsing - mirroring the historical external
+    `combine` script's ascii-append behavior, but without writing anything
+    into the simulation directory itself.
+
+    Args:
+        path: Simulation directory (top-level, single restart, or already
+            combined - `find_restart_dirs` figures out which).
+        filename: Exact filename to look for in each restart directory.
+        header_lines: Number of leading header lines to keep only from the
+            first file found (dropped from subsequent files).
+        loader: Callable taking a file path and returning the parsed dict.
+
+    Returns:
+        The result of `loader` applied to the (possibly concatenated) data.
+
+    Raises:
+        FileNotFoundError: If `filename` isn't found in any restart directory.
+    """
+    paths = [
+        candidate for candidate in
+        (os.path.join(d, filename) for d in find_restart_dirs(path))
+        if os.path.exists(candidate)
+    ]
+    if not paths:
+        raise FileNotFoundError(f"No file named {filename!r} found under {path!r}")
+    if len(paths) == 1:
+        return loader(paths[0])
+
+    fd, tmp_path = tempfile.mkstemp(suffix=f"_{filename}")
+    try:
+        with os.fdopen(fd, "w") as out_f:
+            for i, src_path in enumerate(paths):
+                with open(src_path, "r") as in_f:
+                    lines = in_f.readlines()
+                out_f.writelines(lines if i == 0 else lines[header_lines:])
+        return loader(tmp_path)
+    finally:
+        os.remove(tmp_path)
 
 
 def _straighten(data: dict) -> dict:

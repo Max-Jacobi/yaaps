@@ -24,7 +24,7 @@ cd yaaps
 pip install -e .
 ```
 
-This installs YAAPS and all its dependencies (`numpy`, `scipy`, `h5py`, `matplotlib`, `tqdm`, `simtroller`).
+This installs YAAPS and all its dependencies (`numpy`, `scipy`, `h5py`, `matplotlib`, `tqdm`).
 
 ---
 
