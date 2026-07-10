@@ -20,31 +20,15 @@
 # ---------------------------------------------------------------------------
 # History (hst) plot: all simulations are combined in the same figure
 # ---------------------------------------------------------------------------
-[density_history]
+[hydro_hist]
 type = "hst"
 
 # Variables to plot; each entry is a subplot.
 # Use comma separation for multiple lines in one subplot: "var1,var2"
-vars = ["max_rho", "mass"]
+vars = ["max_rho", "max_T", "min_alpha", "hw_M_1"]
 
 # X-axis variable (default: "time")
 xvar = "time"
-
-# Colors for each simulation (auto-generated if omitted)
-# colors = ["C0", "C1", "C2"]
-
-# Function transformations: keys are var names, values are function strings.
-# Supported built-in: "relabs", "absdiff", "diff", "inv", "abs", or any
-# expression that eval() understands (e.g. "np.log10", "lambda d: d*1e3").
-# [density_history.funcs]
-# max_rho = "relabs"
-
-# Y-axis log scale for specific variables
-# ylog = ["mass"]
-
-# Y-axis limits per variable: {var_name = [min, max]}
-# [density_history.ylim]
-# max_rho = [1e14, 1e16]
 
 # X-axis limits [min, max]
 # xlim = [0.0, 100.0]
@@ -54,6 +38,38 @@ xvar = "time"
 # dpi = 200
 # figsize = [14, 8]   # [width, height] in inches
 
+# Colors for each simulation (auto-generated if omitted)
+# colors = ["C0", "C1", "C2"]
+
+# Function transformations: keys are var names, values are function strings.
+# Supported built-in: "relabs", "absdiff", "diff", "inv", "abs", or any
+# expression that eval() understands (e.g. "np.log10", "lambda d: d*1e3").
+# [hydro_hist.funcs]
+# max_rho = "relabs"
+
+# Y-axis log scale for specific variables
+ylog = ["hw_M_1"]
+
+# Y-axis limits per variable: {var_name = [min, max]}
+# [hydro_hist.ylim]
+# max_rho = [1e14, 1e16]
+
+[error_hist]
+type = "hst"
+vars = ["H-norm2,C-norm2", "mass", "num_c2p_fail", "div_B"]
+ylog = ["mass", "H-norm2", "div_B"]
+[error_hist.funcs]
+mass = "relabs"
+
+[B_hist]
+type = "hst"
+vars = ["max_B2", "E_B", "E_kin"]
+ylog = ["max_B2", "E_B", "E_kin"]
+
+[nu_hist]
+type = "hst"
+vars = ["max_sc_nG_00,max_sc_nG_00,max_sc_nG_00", "max_sc_E_00,max_sc_E_00,max_sc_E_00"]
+ylog = ["max_sc_nG_00", "max_sc_E_00"]
 
 # ---------------------------------------------------------------------------
 # Simulation-combined plot: grid of subplots, one per simulation
@@ -68,7 +84,7 @@ vars = ["hydro.prim.rho"]
 sampling = "xy"
 
 # Specific times to plot (finds nearest available)
-times = [0.0, 50.0, 100.0]
+times = [0.0, 500.0, 1000.0, 1500.0, 2000.0]
 
 # Or use time range:
 # time_min = 0.0
@@ -76,13 +92,13 @@ times = [0.0, 50.0, 100.0]
 # time_every = 5
 
 # Plot boundary (symmetric: -boundary to +boundary)
-boundary = 50.0
+boundary = 100.0
 
 # Colormap and normalization
-cmap = "magma"
-norm = "log"
-# vmin = 1e10
-# vmax = 1e16
+# cmap = "magma"
+# norm = "log"
+vmin = 1e3
+vmax = 1e16
 
 # Function applied to data before plotting
 # func = "np.abs"
@@ -91,7 +107,7 @@ norm = "log"
 # meshblocks = false
 
 # Paper-format labels and units
-# paper_format = true
+paper_format = true
 
 # DPI for output
 dpi = 200
@@ -99,140 +115,147 @@ dpi = 200
 # Figure size [width, height] in inches (auto-computed if omitted)
 # figsize = [12, 10]
 
-# Contour overlay (optional)
-# [[rho_snapshots.contour]]
-# var = "hydro.prim.rho"
-# bounds = 50.0
-# N_points = 200
-# levels = [1e12, 1e13, 1e14]
-# colors = ["white", "gray", "black"]
-# linewidths = 1.0
-# linestyles = "solid"
-# cbar = false
-# alpha = 0.8
-
-
-# ---------------------------------------------------------------------------
-# Variable-combined plot: grid of subplots, one per variable
-# ---------------------------------------------------------------------------
-[multi_var_snapshots]
-type = "var_combined"
-
-# List of variables to combine. Can be plain strings or tables with per-var options.
-# Plain string form:
-# vars = ["hydro.prim.rho", "hydro.prim.p"]
-
+[T_snapshots]
+type = "sim_combined"
+vars = ["hydro.aux.T"]
 sampling = "xy"
-times = [50.0, 100.0]
-boundary = 50.0
+times = [0.0, 500.0, 1000.0, 1500.0, 2000.0]
+boundary = 100.0
+norm="log"
+vmin = 1e-2
+vmax = 1e2
+paper_format = true
 dpi = 200
 
-# Table form with per-variable options:
-# NOTE: In TOML, all plain key-value pairs for a section must appear
-# BEFORE any [[array_of_tables]] entries, otherwise they get parsed
-# into the last array entry instead of the parent section.
-[[multi_var_snapshots.vars]]
+# Contour overlay (optional)
+[[T_snapshots.contour]]
 var = "hydro.prim.rho"
-cmap = "magma"
-norm = "log"
+bounds = 100.0
+N_points = 200
+levels = [1e10, 1e13]
+colors = "white"
+linewidths = 1.0
+linestyles = "solid"
+cbar = false
+alpha = 0.8
 
-[[multi_var_snapshots.vars]]
-var = "hydro.prim.p"
-cmap = "inferno"
-norm = "log"
-
+# # ---------------------------------------------------------------------------
+# # Variable-combined plot: grid of subplots, one per variable
+# # ---------------------------------------------------------------------------
+# [multi_var_snapshots]
+# type = "var_combined"
+#
+# # List of variables to combine. Can be plain strings or tables with per-var options.
+# # Plain string form:
+# # vars = ["hydro.prim.rho", "hydro.aux.T"]
+#
+# sampling = "xy"
+# times = [50.0, 100.0]
+# boundary = 50.0
+# dpi = 200
+#
+# # Table form with per-variable options:
+# # NOTE: In TOML, all plain key-value pairs for a section must appear
+# # BEFORE any [[array_of_tables]] entries, otherwise they get parsed
+# # into the last array entry instead of the parent section.
 # [[multi_var_snapshots.vars]]
-# var = "hydro.prim.velx"
-# cmap = "RdBu_r"
-# norm = "lin"
-# func = "None"
-# # Per-variable contour overlay:
-# [[multi_var_snapshots.vars.contour]]
 # var = "hydro.prim.rho"
-# levels = [1e13]
-# colors = ["white"]
-# bounds = 50.0
+# cmap = "magma"
+# norm = "log"
+#
+# [[multi_var_snapshots.vars]]
+# var = "hydro.aux.T"
+#
+# # [[multi_var_snapshots.vars]]
+# # var = "hydro.prim.velx"
+# # cmap = "RdBu_r"
+# # norm = "lin"
+# # func = "None"
+# # # Per-variable contour overlay:
+# # [[multi_var_snapshots.vars.contour]]
+# # var = "hydro.prim.rho"
+# # levels = [1e13]
+# # colors = ["white"]
+# # bounds = 50.0
+#
+# # Global contour applied to all subplots (if per-variable not set)
+# # [[multi_var_snapshots.contour]]
+# # var = "hydro.prim.rho"
+# # bounds = 50.0
+# # levels = [1e13, 1e14]
+# # colors = ["white", "gray"]
 
-# Global contour applied to all subplots (if per-variable not set)
-# [[multi_var_snapshots.contour]]
+
+# # ---------------------------------------------------------------------------
+# # Simulation-combined animation: grid of sims, animated over time
+# # ---------------------------------------------------------------------------
+# [rho_anim]
+# type = "sim_combined_anim"
+#
+# # Single variable for animation
+# vars = "hydro.prim.rho"
+#
+# sampling = "xy"
+# boundary = 50.0
+#
+# # Time range for frames
+# # time_min = 0.0
+# # time_max = 200.0
+# time_every = 1
+#
+# # Rendering options
+# cmap = "magma"
+# norm = "log"
+# # vmin = 1e10
+# # vmax = 1e16
+# # func = "None"
+# # meshblocks = false
+# # paper_format = false
+#
+# # Output options
+# dpi = 150
+# fps = "24"
+# # figsize = [12, 10]
+#
+# # Contour overlay for animation frames
+# # [[rho_anim.contour]]
+# # var = "hydro.prim.rho"
+# # bounds = 50.0
+# # N_points = 200
+# # levels = [1e13, 1e14]
+# # colors = ["white", "gray"]
+#
+#
+# # ---------------------------------------------------------------------------
+# # Variable-combined animation: multiple vars per frame, animated over time
+# # ---------------------------------------------------------------------------
+# [multi_var_anim]
+# type = "var_combined_anim"
+#
+# sampling = "xy"
+# boundary = 50.0
+#
+# # time_min = 0.0
+# # time_max = 200.0
+# time_every = 1
+#
+# dpi = 150
+# fps = "24"
+# # figsize = [12, 10]
+# # meshblocks = false
+# # paper_format = false
+#
+# [[multi_var_anim.vars]]
 # var = "hydro.prim.rho"
-# bounds = 50.0
-# levels = [1e13, 1e14]
-# colors = ["white", "gray"]
-
-
-# ---------------------------------------------------------------------------
-# Simulation-combined animation: grid of sims, animated over time
-# ---------------------------------------------------------------------------
-[rho_anim]
-type = "sim_combined_anim"
-
-# Single variable for animation
-vars = "hydro.prim.rho"
-
-sampling = "xy"
-boundary = 50.0
-
-# Time range for frames
-# time_min = 0.0
-# time_max = 200.0
-time_every = 1
-
-# Rendering options
-cmap = "magma"
-norm = "log"
-# vmin = 1e10
-# vmax = 1e16
-# func = "None"
-# meshblocks = false
-# paper_format = false
-
-# Output options
-dpi = 150
-fps = "24"
-# figsize = [12, 10]
-
-# Contour overlay for animation frames
-# [[rho_anim.contour]]
-# var = "hydro.prim.rho"
-# bounds = 50.0
-# N_points = 200
-# levels = [1e13, 1e14]
-# colors = ["white", "gray"]
-
-
-# ---------------------------------------------------------------------------
-# Variable-combined animation: multiple vars per frame, animated over time
-# ---------------------------------------------------------------------------
-[multi_var_anim]
-type = "var_combined_anim"
-
-sampling = "xy"
-boundary = 50.0
-
-# time_min = 0.0
-# time_max = 200.0
-time_every = 1
-
-dpi = 150
-fps = "24"
-# figsize = [12, 10]
-# meshblocks = false
-# paper_format = false
-
-[[multi_var_anim.vars]]
-var = "hydro.prim.rho"
-cmap = "magma"
-norm = "log"
-
-[[multi_var_anim.vars]]
-var = "hydro.prim.press"
-cmap = "inferno"
-norm = "log"
-
-# Global contour for all subplots in animation
-# [[multi_var_anim.contour]]
-# var = "hydro.prim.rho"
-# bounds = 50.0
-# levels = [1e13]
-# colors = ["white"]
+# cmap = "magma"
+# norm = "log"
+#
+# [[multi_var_anim.vars]]
+# var = "hydro.aux.T"
+#
+# # Global contour for all subplots in animation
+# # [[multi_var_anim.contour]]
+# # var = "hydro.prim.rho"
+# # bounds = 50.0
+# # levels = [1e13]
+# # colors = ["white"]

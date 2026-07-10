@@ -169,7 +169,8 @@ def _plot_hst(
     variables = cfg.get("vars", ["max_rho"])
     if isinstance(variables, str):
         variables = [variables]
-    colors = cfg.get("colors", [f"C{i}" for i in range(len(sims))])
+    dflt_colors = [sim.md.get("color", f"C{i}") for i, sim in enumerate(sims)]
+    colors = cfg.get("colors", dflt_colors)
     xvar = cfg.get("xvar", "time")
     xlim = cfg.get("xlim", None)
     xlog = cfg.get("xlog", False)
