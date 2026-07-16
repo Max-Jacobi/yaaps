@@ -25,7 +25,7 @@ ap.add_argument('vars', type=str, help="Variables to plot. "
                 nargs='*', default=["max_rho"])
 ap.add_argument('-o','--outputpath', type=str, default=None,
                 help="Path to save at")
-ap.add_argument('-s','--simdir', type=str, default=['active'], nargs='+',
+ap.add_argument('-s','--simdir', type=str, default=['.'], nargs='+',
                 help="Directories to look for athdf files in")
 ap.add_argument('-l','--listvars', action="store_true",
                 help="List the available variables and exit")
@@ -81,7 +81,8 @@ if args.outputpath is None:
     os.close(fd)
 
 if args.colors is None:
-    args.colors = [f"C{ii}" for ii, _ in enumerate(sims)]
+    args.colors = [sim.md.get("color", f"C{i}") for i, sim in enumerate(sims)]
+
 elif len(sims) > len(args.colors):
     raise ValueError("Not enough colors for simulations")
 

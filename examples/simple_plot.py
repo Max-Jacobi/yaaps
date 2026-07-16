@@ -17,7 +17,7 @@ ap.add_argument('-o','--outputpath', type=str, default=None,
                 help="Path to save at")
 ap.add_argument('-t','--time', type=float, default=1e5,
                 help="Time to plot at")
-ap.add_argument('-s','--simdir', type=str, default='active',
+ap.add_argument('-s','--simdir', type=str, default='.',
                 help="Directory to look for athdf files in")
 ap.add_argument('-r','--sampling', type=str, default='xy',
                 help="Plane to plot")
