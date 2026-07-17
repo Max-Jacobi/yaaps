@@ -6,19 +6,19 @@ for loading and interacting with GRAthena++ simulation output data, including
 parameter files, history files, waveform data, tracer particles, and 2D plots.
 """
 
-import os
 import json
+import os
 import tempfile
-from typing import Optional, Iterable
+from collections.abc import Iterable
 from functools import lru_cache
 
 import numpy as np
 
-from .scrape import AthdfScraper, find_restart_dirs
-from .input import Input
 from .athena_read import hst
-from .plot2D import NativeColorPlot
 from .decorations import var_alias
+from .input import Input
+from .plot2D import NativeColorPlot
+from .scrape import AthdfScraper, find_restart_dirs
 
 
 class Simulation:
@@ -55,17 +55,14 @@ class Simulation:
         array([0.0, 0.1, 0.2, ...])
         >>> sim.plot2d(time=100.0, var="rho")  # Create 2D density plot
     """
+
     path: str
     problem_id: str
     input: Input
     name: str
     md: dict
 
-    def __init__(
-        self,
-        path: str,
-        input_path: Optional[str] = None
-    ):
+    def __init__(self, path: str, input_path: str | None = None):
         self.path = os.path.abspath(path)
         path_split = path.split("/")
         if (("output-" in path_split[-1]) or ("combine" in path_split[-1])) and len(path_split) > 1:
@@ -104,29 +101,28 @@ class Simulation:
         for md_path in ("metadata.json", "../metadata.json"):
             md_path = os.path.join(path, md_path)
             if os.path.exists(md_path):
-                with open(md_path, 'r') as f:
+                with open(md_path) as f:
                     self.md = json.load(f)
 
-
-        rl  = 0
-        if 'trackers_extrema/ref_level' in self.input:
-            rl = self.input['trackers_extrema/ref_level'][0]
+        rl = 0
+        if "trackers_extrema/ref_level" in self.input:
+            rl = self.input["trackers_extrema/ref_level"][0]
         else:
             for i_track in range(5):
-                if f'trackers_extrema/ref_level_{i_track}' not in self.input:
+                if f"trackers_extrema/ref_level_{i_track}" not in self.input:
                     break
-                if f'trackers_extrema/ref_type_{i_track}' == 2:
+                if f"trackers_extrema/ref_type_{i_track}" == 2:
                     continue
-                rl = max(rl, self.input[f'trackers_extrema/ref_level_{i_track}'][0])
+                rl = max(rl, self.input[f"trackers_extrema/ref_level_{i_track}"][0])
         self.dx: list[float] = []
         for ii in range(1, 4):
-            bb = self.input[f'mesh/x{ii}max'] - self.input[f'mesh/x{ii}min']
-            nx = self.input[f'mesh/nx{ii}']
-            self.dx.append(bb/nx/2**rl)
-        self.problem_id = self.input['job/problem_id']
+            bb = self.input[f"mesh/x{ii}max"] - self.input[f"mesh/x{ii}min"]
+            nx = self.input[f"mesh/nx{ii}"]
+            self.dx.append(bb / nx / 2**rl)
+        self.problem_id = self.input["job/problem_id"]
 
     @property
-    @lru_cache
+    @lru_cache  # noqa: B019 -- intentional cache on long-lived Simulation instance
     def hst(self) -> dict:
         """
         Load and return the history (.hst) file data.
@@ -139,8 +135,9 @@ class Simulation:
             Dictionary mapping column names to NumPy arrays of values,
             sorted by iteration or time to remove duplicate entries.
         """
-        return _straighten(_load_ascii_multi(
-            self.path, f"{self.problem_id}.hst", 2, hst, self._restart_dirs))
+        return _straighten(
+            _load_ascii_multi(self.path, f"{self.problem_id}.hst", 2, hst, self._restart_dirs)
+        )
 
     def wav(self, radius: float, prefix="wav") -> dict:
         """
@@ -184,7 +181,7 @@ class Simulation:
         return _load_ascii_multi(self.path, filename, 1, _read_ascii, self._restart_dirs)
 
     @property
-    @lru_cache
+    @lru_cache  # noqa: B019 -- intentional cache on long-lived Simulation instance
     def scrape(self) -> AthdfScraper:
         """
         Get the directory scraper for accessing athdf output files.
@@ -193,14 +190,15 @@ class Simulation:
             An AthdfScraper object configured for this simulation's
             meshblock structure.
         """
-        n_mb_x1 = self.input['meshblock/nx1']
-        n_mb_x2 = self.input['meshblock/nx2']
-        n_mb_x3 = self.input['meshblock/nx2']
+        n_mb_x1 = self.input["meshblock/nx1"]
+        n_mb_x2 = self.input["meshblock/nx2"]
+        n_mb_x3 = self.input["meshblock/nx3"]
         return AthdfScraper(
-            self.path, N_B=(n_mb_x1, n_mb_x2, n_mb_x3), source_dirs=self._restart_dirs)
+            self.path, N_B=(n_mb_x1, n_mb_x2, n_mb_x3), source_dirs=self._restart_dirs
+        )
 
-    @lru_cache
-    def available(self, var:str) -> list:
+    @lru_cache  # noqa: B019 -- intentional cache on long-lived Simulation instance
+    def available(self, var: str) -> list:
         """
         Get available sampling and ghost zone configurations for a variable.
 
@@ -210,9 +208,11 @@ class Simulation:
         Returns:
             List of (sampling, ghosts) tuples available for the variable.
         """
-        return [(sampling, ghosts) for (vv, sampling, ghosts)
-                in self.scrape.debug_data_keys().keys()
-                if vv == var]
+        return [
+            (sampling, ghosts)
+            for (vv, sampling, ghosts) in self.scrape.debug_data_keys().keys()
+            if vv == var
+        ]
 
     def complete_var(self, var: str, sampling: tuple[str, ...]) -> tuple[str, bool]:
         """
@@ -235,17 +235,23 @@ class Simulation:
         if var in var_alias:
             var = var_alias[var]
         sampling = tuple(x[:2] for x in sampling)
-        candidates = [(vv, samp, gh)
-                      for vv, samp, gh in self.scrape.debug_data_keys().keys()
-                      if vv.endswith(var)]
+        candidates = [
+            (vv, samp, gh)
+            for vv, samp, gh in self.scrape.debug_data_keys().keys()
+            if vv.endswith(var)
+        ]
         if len(candidates) == 0:
             raise ValueError(f"Can't complete variable {var}.")
-        vcan = [(vv, samp, gh) for vv, samp, gh in candidates if samp==sampling]
+        vcan = [(vv, samp, gh) for vv, samp, gh in candidates if samp == sampling]
         if len(vcan) > 1:
-            raise ValueError(f"More than one completion of {var} available: {[v for v, *_ in vcan]}")
+            raise ValueError(
+                f"More than one completion of {var} available: {[v for v, *_ in vcan]}"
+            )
         if len(vcan) == 0:
-            raise ValueError(f"Sampling {sampling} not available for variable {var}.\n"
-                             f"Available: {[(v, s) for v, s, _ in candidates]}")
+            raise ValueError(
+                f"Sampling {sampling} not available for variable {var}.\n"
+                f"Available: {[(v, s) for v, s, _ in candidates]}"
+            )
         return vcan[0][0], vcan[0][2]
 
     def plot2d(self, time: float, *args, **kwargs) -> NativeColorPlot:
@@ -287,7 +293,11 @@ class Simulation:
 
 
 def _load_ascii_multi(
-    path: str, filename: str, header_lines: int, loader, restart_dirs=None,
+    path: str,
+    filename: str,
+    header_lines: int,
+    loader,
+    restart_dirs=None,
 ) -> dict:
     """
     Load an ASCII data file that may be split across restart directories.
@@ -327,7 +337,7 @@ def _load_ascii_multi(
     for d in dirs:
         candidate = os.path.join(d, filename)
         try:
-            with open(candidate, "r") as f:
+            with open(candidate) as f:
                 found.append((candidate, f.readlines()))
         except FileNotFoundError:
             continue
@@ -358,10 +368,10 @@ def _straighten(data: dict) -> dict:
         Dictionary with arrays sorted and deduplicated by the sort key.
     """
     data = {k: np.atleast_1d(v) for k, v in data.items()}
-    if 'iter' in data:
-        dsort = data['iter']
-    elif 'time' in data:
-        dsort = data['time']
+    if "iter" in data:
+        dsort = data["iter"]
+    elif "time" in data:
+        dsort = data["time"]
     else:
         return data
     if len(dsort) == 0:
@@ -369,6 +379,7 @@ def _straighten(data: dict) -> dict:
     _, isort = np.unique(dsort[::-1], return_index=True)
     isort = len(dsort) - 1 - isort
     return {k: dd[isort] for k, dd in data.items()}
+
 
 def _read_ascii(path: str) -> dict:
     """
@@ -384,7 +395,7 @@ def _read_ascii(path: str) -> dict:
         Dictionary mapping column names to NumPy arrays of values,
         sorted and deduplicated by time/iteration.
     """
-    with open(path, 'r') as f:
+    with open(path) as f:
         line = "#"
         while line.startswith("#"):
             header = line
@@ -393,8 +404,8 @@ def _read_ascii(path: str) -> dict:
 
     # an empty string means we already hit EOF right after the header while
     # reading above - reuse that instead of a separate getsize() stat call.
-    if line == '':
-        data = np.array([[]]*len(keys))
+    if line == "":
+        data = np.array([[]] * len(keys))
     else:
         data = np.loadtxt(path, skiprows=1, unpack=True)
-    return _straighten(dict(zip(keys, data)))
+    return _straighten(dict(zip(keys, data, strict=False)))

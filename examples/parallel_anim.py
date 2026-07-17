@@ -29,19 +29,18 @@ Assemble frames into a video afterwards, e.g. with ffmpeg::
   ffmpeg -framerate 24 -i frames/frame_%06d.png -c:v libx264 out.mp4
 """
 
-import os
 import argparse
 import multiprocessing
+import os
 import subprocess
 
 # Set the non-interactive Agg backend *before* any other matplotlib import.
 # This is required for headless (no-display) rendering and must happen at
 # module level so that it is executed in every worker process as well.
 import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt  # noqa: E402 (import after matplotlib.use)
 
-import numpy as np  # noqa: E402  (available in worker func-string eval scope)
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402 (import after matplotlib.use)
 from tqdm import tqdm  # noqa: E402
 
 import yaaps as ya  # noqa: E402
@@ -49,11 +48,10 @@ import yaaps.plot2D as yp  # noqa: E402
 from yaaps.datatypes import Native  # noqa: E402
 from yaaps.plot_formatter import PlotFormatter  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Per-worker global state – set once by _worker_init, reused for every frame.
 # ---------------------------------------------------------------------------
-_sim = None        # yaaps.Simulation loaded for this worker
+_sim = None  # yaaps.Simulation loaded for this worker
 _worker_cfg = None  # dict with all rendering options
 
 
@@ -74,7 +72,7 @@ def _worker_init(sim_path: str, cfg: dict) -> None:
     # Explicitly set the backend in each spawned worker (important on
     # macOS/Windows where 'spawn' is the default start method and the
     # parent's matplotlib state may not be inherited).
-    matplotlib.use('Agg')
+    matplotlib.use("Agg")
     _sim = ya.Simulation(sim_path)
     _worker_cfg = cfg
 
@@ -100,28 +98,28 @@ def _render_frame(task: tuple) -> str:
     # Passing a callable through the task queue would require pickling it,
     # which fails for lambdas.  Passing the source string and eval-ing it
     # here is the simplest portable solution.
-    func = eval(cfg.get('func_str', 'None'))  # noqa: S307
+    func = eval(cfg.get("func_str", "None"))  # noqa: S307
 
-    figsize = cfg.get('figsize') or (6, 4)
+    figsize = cfg.get("figsize") or (6, 4)
     fig, ax = plt.subplots(1, figsize=figsize)
 
-    boundary = cfg.get('boundary')
+    boundary = cfg.get("boundary")
     if boundary is not None:
         ax.set_xlim(-boundary, boundary)
         ax.set_ylim(-boundary, boundary)
 
     # Build NativeColorPlot kwargs, mirroring simple_anim.py.
     plot_kwargs = dict(
-        var=cfg['var'],
-        norm=cfg.get('norm'),
+        var=cfg["var"],
+        norm=cfg.get("norm"),
         func=func,
-        sampling=cfg.get('sampling', 'xy'),
-        cmap=cfg.get('cmap'),
-        vmin=cfg.get('vmin'),
-        vmax=cfg.get('vmax'),
-        draw_meshblocks=cfg.get('draw_meshblocks', False),
+        sampling=cfg.get("sampling", "xy"),
+        cmap=cfg.get("cmap"),
+        vmin=cfg.get("vmin"),
+        vmax=cfg.get("vmax"),
+        draw_meshblocks=cfg.get("draw_meshblocks", False),
         ax=ax,
-        formatter='paper' if cfg.get('paper_format') else 'raw',
+        formatter="paper" if cfg.get("paper_format") else "raw",
     )
     # Remove None values so NativeColorPlot can apply its own defaults.
     plot_kwargs = {k: v for k, v in plot_kwargs.items() if v is not None}
@@ -129,8 +127,8 @@ def _render_frame(task: tuple) -> str:
     plot = yp.NativeColorPlot(sim=_sim, **plot_kwargs)
     plot.plot(time)
 
-    fname = os.path.join(cfg['output_dir'], f"{cfg['prefix']}{frame_idx:06d}.png")
-    fig.savefig(fname, dpi=cfg['dpi'], bbox_inches='tight')
+    fname = os.path.join(cfg["output_dir"], f"{cfg['prefix']}{frame_idx:06d}.png")
+    fig.savefig(fname, dpi=cfg["dpi"], bbox_inches="tight")
     # Release figure memory immediately; the next frame will create a new one.
     plt.close(fig)
 
@@ -142,54 +140,65 @@ def _render_frame(task: tuple) -> str:
 # 'spawn' start method (default on macOS and Windows) does not recursively
 # execute the setup code in every worker process.
 # ---------------------------------------------------------------------------
-if __name__ == '__main__':
+if __name__ == "__main__":
     ap = argparse.ArgumentParser(
         description="Render animation frames as PNGs in parallel using multiprocessing"
     )
 
-    ap.add_argument('var', type=str,
-                    help="Variable to plot")
-    ap.add_argument('-s', '--simdir', type=str, default='active',
-                    help="Directory to look for athdf files in")
-    ap.add_argument('-o', '--output-dir', type=str, default=None,
-                    help="Output directory for PNG frames "
-                         "(default: VAR_SAMPLING)")
-    ap.add_argument('-w', '--workers', type=int, default=None,
-                    help="Number of worker processes "
-                         "(default: os.cpu_count())")
-    ap.add_argument('-r', '--sampling', type=str, default='xy',
-                    help="Plane to plot")
-    ap.add_argument('-b', '--boundary', type=float, default=None,
-                    help="Boundary of the plot")
-    ap.add_argument('--time_min', type=float, default=None,
-                    help="Time to start at")
-    ap.add_argument('--time_max', type=float, default=None,
-                    help="Time to end at")
-    ap.add_argument('--time_every', type=int, default=1,
-                    help="Create frames at every nth output time")
-    ap.add_argument('-m', '--meshblocks', action='store_true',
-                    help="Draw mesh-block boundaries")
-    ap.add_argument('-f', '--func', default='None', type=str,
-                    help="Modify plot with given function (calls eval)")
-    ap.add_argument('-c', '--cmap', type=str, default=None,
-                    help="Colormap")
-    ap.add_argument('-n', '--norm', type=str, default=None,
-                    help="-n 'log' for logscale")
-    ap.add_argument('--vmin', type=float, default=None,
-                    help="Minimum of the colorscale")
-    ap.add_argument('--vmax', type=float, default=None,
-                    help="Maximum of the colorscale")
-    ap.add_argument('-p', '--paper-format', action='store_true',
-                    help="Use paper-ready and units format for labels")
-    ap.add_argument('--dpi', type=int, default=300,
-                    help="DPI for output images (default: 300)")
-    ap.add_argument('--fps', type=str, default="2",
-                    help="Number of fps for the mp4 output")
-    ap.add_argument('--figsize', type=float, nargs=2, default=None,
-                    metavar=('WIDTH', 'HEIGHT'),
-                    help="Figure size in inches (e.g. --figsize 6 4)")
-    ap.add_argument('-v', '--verbose', action='store_true',
-                    help="Verbose execution")
+    ap.add_argument("var", type=str, help="Variable to plot")
+    ap.add_argument(
+        "-s", "--simdir", type=str, default="active", help="Directory to look for athdf files in"
+    )
+    ap.add_argument(
+        "-o",
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Output directory for PNG frames (default: VAR_SAMPLING)",
+    )
+    ap.add_argument(
+        "-w",
+        "--workers",
+        type=int,
+        default=None,
+        help="Number of worker processes (default: os.cpu_count())",
+    )
+    ap.add_argument("-r", "--sampling", type=str, default="xy", help="Plane to plot")
+    ap.add_argument("-b", "--boundary", type=float, default=None, help="Boundary of the plot")
+    ap.add_argument("--time_min", type=float, default=None, help="Time to start at")
+    ap.add_argument("--time_max", type=float, default=None, help="Time to end at")
+    ap.add_argument(
+        "--time_every", type=int, default=1, help="Create frames at every nth output time"
+    )
+    ap.add_argument("-m", "--meshblocks", action="store_true", help="Draw mesh-block boundaries")
+    ap.add_argument(
+        "-f",
+        "--func",
+        default="None",
+        type=str,
+        help="Modify plot with given function (calls eval)",
+    )
+    ap.add_argument("-c", "--cmap", type=str, default=None, help="Colormap")
+    ap.add_argument("-n", "--norm", type=str, default=None, help="-n 'log' for logscale")
+    ap.add_argument("--vmin", type=float, default=None, help="Minimum of the colorscale")
+    ap.add_argument("--vmax", type=float, default=None, help="Maximum of the colorscale")
+    ap.add_argument(
+        "-p",
+        "--paper-format",
+        action="store_true",
+        help="Use paper-ready and units format for labels",
+    )
+    ap.add_argument("--dpi", type=int, default=300, help="DPI for output images (default: 300)")
+    ap.add_argument("--fps", type=str, default="2", help="Number of fps for the mp4 output")
+    ap.add_argument(
+        "--figsize",
+        type=float,
+        nargs=2,
+        default=None,
+        metavar=("WIDTH", "HEIGHT"),
+        help="Figure size in inches (e.g. --figsize 6 4)",
+    )
+    ap.add_argument("-v", "--verbose", action="store_true", help="Verbose execution")
 
     args = ap.parse_args()
 
@@ -205,7 +214,7 @@ if __name__ == '__main__':
     # physical units; convert them back to code units before filtering,
     # matching the behaviour of simple_anim.py.
     if args.paper_format:
-        formatter = PlotFormatter('paper')
+        formatter = PlotFormatter("paper")
         if args.time_min is not None:
             args.time_min = formatter.inverse_convert_time(args.time_min)
         if args.time_max is not None:
@@ -215,7 +224,7 @@ if __name__ == '__main__':
         times = times[times >= args.time_min]
     if args.time_max is not None:
         times = times[times <= args.time_max]
-    times = times[::args.time_every]
+    times = times[:: args.time_every]
 
     if len(times) == 0:
         print("No frames in the specified time range.")
@@ -243,7 +252,7 @@ if __name__ == '__main__':
         dpi=args.dpi,
         figsize=tuple(args.figsize) if args.figsize else None,
         output_dir=output_dir,
-        prefix='frame_',
+        prefix="frame_",
     )
 
     n_workers = args.workers if args.workers is not None else os.cpu_count()
@@ -251,8 +260,7 @@ if __name__ == '__main__':
 
     tasks = list(enumerate(times))
     if args.verbose:
-        print(f"Rendering {len(tasks)} frames with {n_workers} workers "
-              f"into '{output_dir}'...")
+        print(f"Rendering {len(tasks)} frames with {n_workers} workers into '{output_dir}'...")
 
     # imap_unordered distributes tasks dynamically: as soon as a worker
     # finishes one frame it picks up the next pending one, keeping all
@@ -270,29 +278,38 @@ if __name__ == '__main__':
             disable=not args.verbose,
         )
 
-        results = list(tqdm(
-            pool.imap_unordered(_render_frame, tasks),
-            **tqdmkwargs
-        ))
+        results = list(tqdm(pool.imap_unordered(_render_frame, tasks), **tqdmkwargs))
 
     output_mp4 = os.path.join(output_dir, f"{args.var}_{args.sampling}_{args.boundary:.0f}.mp4")
     try:
-        subprocess.run([
-            "ffmpeg",
-            "-y",                       # overwrite if exists
-            "-framerate", args.fps,
-            "-i", os.path.join(output_dir, "frame_%06d.png"),
-            "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", # ensure H.264 codec-compatible frame sizes
-            "-c:v", "libx264",          # specify H.264 codec (e.g. zulip compatible)
-            "-pix_fmt", "yuv420p",      # compatible pixel format
-            "-crf", "18",
-            "-movflags", "+faststart",  # important for web playback
-            output_mp4,
-        ], check=True,
-        stderr=subprocess.DEVNULL,      # suppress error messages
-        stdout=subprocess.DEVNULL)      # suppress standard output
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",  # overwrite if exists
+                "-framerate",
+                args.fps,
+                "-i",
+                os.path.join(output_dir, "frame_%06d.png"),
+                "-vf",
+                "scale=trunc(iw/2)*2:trunc(ih/2)*2",  # ensure H.264 codec-compatible frame sizes
+                "-c:v",
+                "libx264",  # specify H.264 codec (e.g. zulip compatible)
+                "-pix_fmt",
+                "yuv420p",  # compatible pixel format
+                "-crf",
+                "18",
+                "-movflags",
+                "+faststart",  # important for web playback
+                output_mp4,
+            ],
+            check=True,
+            stderr=subprocess.DEVNULL,  # suppress error messages
+            stdout=subprocess.DEVNULL,
+        )  # suppress standard output
     except subprocess.CalledProcessError:
-        print("ffmpeg failed to create mp4 video. Please ensure ffmpeg is installed and in your PATH.")
+        print(
+            "ffmpeg failed to create mp4 video. Please ensure ffmpeg is installed and in your PATH."
+        )
 
     if args.verbose:
         print(f"Done. {len(results)} frames saved to '{output_dir}'.")

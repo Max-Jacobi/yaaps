@@ -23,8 +23,7 @@ from typing import Literal
 
 import numpy as np
 
-from .units import UnitConverter, FieldLabels
-
+from .units import FieldLabels, UnitConverter
 
 PlotMode = Literal["raw", "paper"]
 """Type alias for plot formatting modes.

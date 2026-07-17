@@ -5,14 +5,16 @@ This module provides helper functions for parallel execution of tasks
 using Python's multiprocessing Pool, with optional progress bars via tqdm.
 """
 
+from collections.abc import Callable, Iterable, Sized
+from functools import partial
 from multiprocessing import Pool
 from sys import stdout
-from typing import Callable, Iterable, Sized, Any
-from functools import partial
+from typing import Any
+
 from tqdm.auto import tqdm
 
-
 # parallele helpers
+
 
 def _apply_tail(func: Callable[..., Any], tail: tuple[Any, ...], item: Any):
     """
@@ -38,7 +40,7 @@ def do_parallel[R](
     args: tuple[Any, ...] = (),
     verbose: bool = False,
     ordered: bool = False,
-    **kwargs
+    **kwargs,
 ) -> Iterable[R]:
     """
     Execute a function on items in parallel using a process pool.
@@ -84,7 +86,10 @@ def do_parallel[R](
             yield from tqdm(pool.imap(func_args, itr), **kwargs)
         yield from tqdm(pool.imap_unordered(func_args, itr), **kwargs)
 
-def _index_then_apply[T, R](ix_x: tuple[int, T], func: Callable[..., R], tail: tuple[Any, ...]) -> tuple[int, R]:
+
+def _index_then_apply[T, R](
+    ix_x: tuple[int, T], func: Callable[..., R], tail: tuple[Any, ...]
+) -> tuple[int, R]:
     """
     Apply a function to an item and return the result with its original index.
 
@@ -109,7 +114,7 @@ def do_parallel_enumerate[T, R](
     n_cpu: int,
     args: tuple[Any, ...] = (),
     verbose: bool = False,
-    **kwargs
+    **kwargs,
 ) -> Iterable[tuple[int, R]]:
     """
     Execute a function on items in parallel, returning results with indices.

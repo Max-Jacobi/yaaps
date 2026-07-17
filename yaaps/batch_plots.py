@@ -29,10 +29,12 @@ import os
 import subprocess
 import sys
 from collections import Counter
+from collections.abc import Callable
 from math import isqrt
-from typing import Any, Callable
+from typing import Any
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
@@ -44,14 +46,12 @@ except ModuleNotFoundError:
 
 import yaaps as ya  # noqa: E402
 import yaaps.plot2D as yp  # noqa: E402
-import yaaps.decorations as yd  # noqa: E402
 from yaaps.datatypes import Native  # noqa: E402
-from yaaps.plot_formatter import PlotFormatter  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Utility helpers
 # ---------------------------------------------------------------------------
+
 
 def _split(N: int) -> tuple[int, int]:
     """Return (rows, cols) for a grid with N panels."""
@@ -166,8 +166,16 @@ Warning_ = tuple[WarningKey, str]
 
 def _blank_axis(ax: plt.Axes, title: str | None = None) -> None:
     """Leave an axis empty (no plot) but clearly marked as intentionally so."""
-    ax.text(0.5, 0.5, "no data", ha="center", va="center",
-            transform=ax.transAxes, color="gray", fontsize=9)
+    ax.text(
+        0.5,
+        0.5,
+        "no data",
+        ha="center",
+        va="center",
+        transform=ax.transAxes,
+        color="gray",
+        fontsize=9,
+    )
     ax.set_xticks([])
     ax.set_yticks([])
     if title:
@@ -211,8 +219,7 @@ def _safe_color_plot(
         rng = "no data" if len(times) == 0 else f"[{times.min():.4g}, {times.max():.4g}]"
         return (
             (sim.name, var, "out_of_range"),
-            f"[{sim.name}] {var!r} has no data covering requested times "
-            f"(available range: {rng})",
+            f"[{sim.name}] {var!r} has no data covering requested times (available range: {rng})",
         )
 
     color_plot = yp.NativeColorPlot(sim=sim, **plot_kwargs)
@@ -271,15 +278,24 @@ def _assemble_mp4(frames_dir: str, output_mp4: str, fps: str) -> bool:
     try:
         subprocess.run(
             [
-                "ffmpeg", "-y",
-                "-framerate", str(fps),
-                "-pattern_type", "glob",
-                "-i", os.path.join(frames_dir, "frame_*.png"),
-                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                "-c:v", "libx264",
-                "-pix_fmt", "yuv420p",
-                "-crf", "18",
-                "-movflags", "+faststart",
+                "ffmpeg",
+                "-y",
+                "-framerate",
+                str(fps),
+                "-pattern_type",
+                "glob",
+                "-i",
+                os.path.join(frames_dir, "frame_*.png"),
+                "-vf",
+                "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-crf",
+                "18",
+                "-movflags",
+                "+faststart",
                 output_mp4,
             ],
             check=True,
@@ -294,6 +310,7 @@ def _assemble_mp4(frames_dir: str, output_mp4: str, fps: str) -> bool:
 # ---------------------------------------------------------------------------
 # Plot type: hst (history)
 # ---------------------------------------------------------------------------
+
 
 def _plot_hst(
     sims: list[ya.Simulation],
@@ -319,10 +336,18 @@ def _plot_hst(
 
     auto_log_keys = [
         "mass",
-        "max_sc_nG_00", "max_sc_nG_01", "max_sc_nG_02",
-        "max_sc_E_00", "max_sc_E_01", "max_sc_E_02",
-        "max_sc_n_00", "max_sc_n_01", "max_sc_n_02",
-        "max_sc_J_00", "max_sc_J_01", "max_sc_J_02",
+        "max_sc_nG_00",
+        "max_sc_nG_01",
+        "max_sc_nG_02",
+        "max_sc_E_00",
+        "max_sc_E_01",
+        "max_sc_E_02",
+        "max_sc_n_00",
+        "max_sc_n_01",
+        "max_sc_n_02",
+        "max_sc_J_00",
+        "max_sc_J_01",
+        "max_sc_J_02",
     ]
 
     # Parse vars (support comma-separated for multi-line subplots)
@@ -362,27 +387,31 @@ def _plot_hst(
         common_path = os.path.commonpath(label_roots)
     else:
         common_path = os.path.dirname(label_roots[0])
-    sim_labels = {sim.path: root.replace(common_path, "").strip("/")
-                  for sim, root in zip(sims, label_roots)}
+    sim_labels = {
+        sim.path: root.replace(common_path, "").strip("/")
+        for sim, root in zip(sims, label_roots, strict=False)
+    }
 
     warnings: list[Warning_] = []
     subplot_has_data: list[bool] = []
 
-    for var, ax in zip(parsed_vars, axs.flat):
+    for var, ax in zip(parsed_vars, axs.flat, strict=False):
         any_line = False
-        for sim, c in zip(sims, colors):
+        for sim, c in zip(sims, colors, strict=False):
             name = sim_labels[sim.path]
             if isinstance(var, list):
-                for v, ls in zip(var, ("-", "--", ":", "-.")):
+                for v, ls in zip(var, ("-", "--", ":", "-."), strict=False):
                     label = v if sim is sims[0] else None
                     try:
                         src = sim.hst
                         data = src[v]
                     except (FileNotFoundError, KeyError) as exc:
-                        warnings.append((
-                            (sim.name, v, "hst_missing"),
-                            f"[{sim.name}] hst column {v!r} not available: {exc}",
-                        ))
+                        warnings.append(
+                            (
+                                (sim.name, v, "hst_missing"),
+                                f"[{sim.name}] hst column {v!r} not available: {exc}",
+                            )
+                        )
                         continue
                     if v in funcs and funcs[v] is not None:
                         data = funcs[v](data)
@@ -393,10 +422,12 @@ def _plot_hst(
                     src = sim.hst
                     data = src[var]
                 except (FileNotFoundError, KeyError) as exc:
-                    warnings.append((
-                        (sim.name, var, "hst_missing"),
-                        f"[{sim.name}] hst column {var!r} not available: {exc}",
-                    ))
+                    warnings.append(
+                        (
+                            (sim.name, var, "hst_missing"),
+                            f"[{sim.name}] hst column {var!r} not available: {exc}",
+                        )
+                    )
                     continue
                 if var in funcs and funcs[var] is not None:
                     data = funcs[var](data)
@@ -434,7 +465,7 @@ def _plot_hst(
 
     # Legends and limits
     sim_legend_exists = False
-    for var, ax, has_data in zip(parsed_vars, axs.flat, subplot_has_data):
+    for var, ax, has_data in zip(parsed_vars, axs.flat, subplot_has_data, strict=False):
         if not has_data:
             continue
         if isinstance(var, list):
@@ -469,6 +500,7 @@ def _plot_hst(
 # ---------------------------------------------------------------------------
 # Plot type: sim_combined (grid of sims, one per subplot)
 # ---------------------------------------------------------------------------
+
 
 def _render_sim_combined_frame(args_tuple: tuple) -> tuple[str | None, list[Warning_]]:
     """Render a single sim-combined frame (for use in pool or serial)."""
@@ -516,9 +548,14 @@ def _render_sim_combined_frame(args_tuple: tuple) -> tuple[str | None, list[Warn
             plot_kwargs["vmax"] = vmax
 
         warning = _safe_color_plot(
-            sim, ax, plot_kwargs, time,
-            contour_cfg=contour_cfg, contour_sampling=sampling,
-            formatter_mode=formatter_mode, boundary=boundary,
+            sim,
+            ax,
+            plot_kwargs,
+            time,
+            contour_cfg=contour_cfg,
+            contour_sampling=sampling,
+            formatter_mode=formatter_mode,
+            boundary=boundary,
         )
         if warning is not None:
             warnings.append(warning)
@@ -574,9 +611,7 @@ def _plot_sim_combined(
         os.makedirs(var_dir, exist_ok=True)
         for ti, time in enumerate(times):
             name_prefix = f"{var}_{ti:04d}_t{time:.2f}"
-            tasks.append(
-                (sim_paths, var, time, sampling, boundary, cfg, var_dir, name_prefix)
-            )
+            tasks.append((sim_paths, var, time, sampling, boundary, cfg, var_dir, name_prefix))
 
     if n_cpus > 1 and len(tasks) > 1:
         with multiprocessing.Pool(n_cpus) as pool:
@@ -595,6 +630,7 @@ def _plot_sim_combined(
 # ---------------------------------------------------------------------------
 # Plot type: var_combined (multiple vars in one figure per time/sim)
 # ---------------------------------------------------------------------------
+
 
 def _render_var_combined_frame(args_tuple: tuple) -> tuple[str | None, list[Warning_]]:
     """Render a single var-combined frame."""
@@ -652,9 +688,14 @@ def _render_var_combined_frame(args_tuple: tuple) -> tuple[str | None, list[Warn
 
         var_contour = var_opts.get("contour", contour_cfg)
         warning = _safe_color_plot(
-            sim, ax, plot_kwargs, time,
-            contour_cfg=var_contour, contour_sampling=var_sampling,
-            formatter_mode=formatter_mode, boundary=boundary,
+            sim,
+            ax,
+            plot_kwargs,
+            time,
+            contour_cfg=var_contour,
+            contour_sampling=var_sampling,
+            formatter_mode=formatter_mode,
+            boundary=boundary,
         )
         if warning is not None:
             warnings.append(warning)
@@ -706,9 +747,7 @@ def _plot_var_combined(
         os.makedirs(sim_dir, exist_ok=True)
         for ti, time in enumerate(times):
             name_prefix = f"vars_{ti:04d}_t{time:.2f}"
-            tasks.append(
-                (sim.path, variables, time, sampling, boundary, cfg, sim_dir, name_prefix)
-            )
+            tasks.append((sim.path, variables, time, sampling, boundary, cfg, sim_dir, name_prefix))
 
     if n_cpus > 1 and len(tasks) > 1:
         with multiprocessing.Pool(n_cpus) as pool:
@@ -790,9 +829,14 @@ def _sim_anim_render_frame(task: tuple[int, float]) -> tuple[str | None, list[Wa
             plot_kwargs["vmax"] = vmax
 
         warning = _safe_color_plot(
-            sim, ax, plot_kwargs, time,
-            contour_cfg=contour_cfg, contour_sampling=sampling,
-            formatter_mode=formatter_mode, boundary=boundary,
+            sim,
+            ax,
+            plot_kwargs,
+            time,
+            contour_cfg=contour_cfg,
+            contour_sampling=sampling,
+            formatter_mode=formatter_mode,
+            boundary=boundary,
         )
         if warning is not None:
             warnings.append(warning)
@@ -886,7 +930,9 @@ def _anim_sim_combined(
         print(f"  {skipped} frame(s) skipped entirely (all panels blank).", file=sys.stderr)
 
     if not valid:
-        print(f"  WARNING: all frames blank for [{section_name}]; no video created.", file=sys.stderr)
+        print(
+            f"  WARNING: all frames blank for [{section_name}]; no video created.", file=sys.stderr
+        )
         return
 
     output_mp4 = os.path.join(output_dir, section_name, f"{section_name}.mp4")
@@ -974,9 +1020,14 @@ def _var_anim_render_frame(task: tuple[int, float]) -> tuple[str | None, list[Wa
 
         var_contour = var_opts.get("contour", contour_cfg)
         warning = _safe_color_plot(
-            sim, ax, plot_kwargs, time,
-            contour_cfg=var_contour, contour_sampling=var_sampling,
-            formatter_mode=formatter_mode, boundary=boundary,
+            sim,
+            ax,
+            plot_kwargs,
+            time,
+            contour_cfg=var_contour,
+            contour_sampling=var_sampling,
+            formatter_mode=formatter_mode,
+            boundary=boundary,
         )
         if warning is not None:
             warnings.append(warning)
@@ -1018,8 +1069,11 @@ def _anim_var_combined(
         try:
             data = Native(sim, first_var, sampling)
         except (ValueError, KeyError) as exc:
-            print(f"  WARNING: [{sim.name}] variable {first_var!r} not available, "
-                  f"skipping this sim for {section_name}: {exc}", file=sys.stderr)
+            print(
+                f"  WARNING: [{sim.name}] variable {first_var!r} not available, "
+                f"skipping this sim for {section_name}: {exc}",
+                file=sys.stderr,
+            )
             continue
         times = data.time_range
         if time_min is not None:
@@ -1057,17 +1111,19 @@ def _anim_var_combined(
         _print_clustered_warnings(warnings)
         skipped = len(results) - len(valid)
         if skipped:
-            print(f"  [{sim.name}] {skipped} frame(s) skipped entirely (all panels blank).",
-                  file=sys.stderr)
+            print(
+                f"  [{sim.name}] {skipped} frame(s) skipped entirely (all panels blank).",
+                file=sys.stderr,
+            )
 
         if not valid:
-            print(f"  WARNING: [{sim.name}] all frames blank for {section_name}; "
-                  "no video created.", file=sys.stderr)
+            print(
+                f"  WARNING: [{sim.name}] all frames blank for {section_name}; no video created.",
+                file=sys.stderr,
+            )
             continue
 
-        output_mp4 = os.path.join(
-            output_dir, section_name, sim.name, f"{section_name}.mp4"
-        )
+        output_mp4 = os.path.join(output_dir, section_name, sim.name, f"{section_name}.mp4")
         if _assemble_mp4(frames_dir, output_mp4, fps):
             print(f"  Created: {output_mp4}")
         else:
@@ -1096,23 +1152,32 @@ def main() -> None:
         "from a TOML configuration file."
     )
     ap.add_argument(
-        "--sims", "-s",
-        type=str, nargs="+", required=True,
+        "--sims",
+        "-s",
+        type=str,
+        nargs="+",
+        required=True,
         help="Paths to simulation directories",
     )
     ap.add_argument(
-        "--output-dir", "-o",
-        type=str, default="./batch_plots",
+        "--output-dir",
+        "-o",
+        type=str,
+        default="./batch_plots",
         help="Directory to save all generated plots/animations",
     )
     ap.add_argument(
-        "--config", "-c",
-        type=str, required=True,
+        "--config",
+        "-c",
+        type=str,
+        required=True,
         help="Path to TOML configuration file describing plots to generate",
     )
     ap.add_argument(
-        "--cpus", "-n",
-        type=int, default=1,
+        "--cpus",
+        "-n",
+        type=int,
+        default=1,
         help="Number of CPUs for parallelization",
     )
 

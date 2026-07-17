@@ -8,7 +8,6 @@ supporting hierarchical section-based organization and various data types.
 import re
 from collections.abc import Mapping
 from typing import Any
-import numpy as np
 
 max_inp_len = 10000
 
@@ -47,8 +46,9 @@ class Input(Mapping):
         self.data = {}
         current_section = None
 
+        value = ""
         in_list = False
-        with open(file_path, 'r', errors='replace') as inp:
+        with open(file_path, errors="replace") as inp:
             for _ in range(max_inp_len):
                 line = inp.readline()
                 if (line == "") or ("<par_end>" in line):
@@ -59,28 +59,28 @@ class Input(Mapping):
                     continue
 
                 # Skip comments and empty lines
-                if '#' in line:
-                    line = line[:line.index('#')]
-                if '//' in line:
-                    line = line[:line.index('//')]
+                if "#" in line:
+                    line = line[: line.index("#")]
+                if "//" in line:
+                    line = line[: line.index("//")]
                 line = line.strip()
                 if not line:
                     continue
 
                 if in_list:
-                    value += " "+line
+                    value += " " + line
                 else:
                     # Check if the line contains a section header
-                    match_section = re.match(r'^<(\w+)>', line)
+                    match_section = re.match(r"^<(\w+)>", line)
                     if match_section:
                         current_section = match_section.group(1)
                         self.data[current_section] = {}
                         continue
 
                     # Check if the line contains a parameter (key-value pair)
-                    match_param = re.match(r'^(\w+)\s*=\s*(.+)$', line)
+                    match_param = re.match(r"^(\w+)\s*=\s*(.+)$", line)
                     if current_section is None:
-                        raise ValueError('File does not start with a section header')
+                        raise ValueError("File does not start with a section header")
                     if not match_param:
                         raise ValueError(f'Invalid line: "{line}"')
 
@@ -108,7 +108,7 @@ class Input(Mapping):
         Raises:
             KeyError: If the key is not found.
         """
-        keys = key.split('/')
+        keys = key.split("/")
         result = self.data
         for k in keys:
             result = result[k]
@@ -148,9 +148,9 @@ class Input(Mapping):
                 return typ(value)
             except ValueError:
                 pass
-        if value.lower() == 'true':
+        if value.lower() == "true":
             return True
-        if value.lower() == 'false':
+        if value.lower() == "false":
             return False
         return value
 
@@ -182,11 +182,14 @@ class Input(Mapping):
             for key in {*grp1.keys(), *grp2.keys()}:
                 v1 = grp1.get(key, " - ")
                 v2 = grp2.get(key, " - ")
-                if not ((isinstance(v1 ,float)
-                         and (isinstance(v2, float)
-                         and 2*(v1-v2)<float_tol*(v1+v2)))
-                        or v1==v2):
-                        diff[grp][key] = (v1, v2)
+                if not (
+                    (
+                        isinstance(v1, float)
+                        and (isinstance(v2, float) and 2 * (v1 - v2) < float_tol * (v1 + v2))
+                    )
+                    or v1 == v2
+                ):
+                    diff[grp][key] = (v1, v2)
             if len(diff[grp]) == 0:
                 del diff[grp]
         return diff

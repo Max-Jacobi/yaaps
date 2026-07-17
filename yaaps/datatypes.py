@@ -8,9 +8,10 @@ and vector field data.
 """
 
 from abc import ABC, abstractmethod
-from typing import Callable, TYPE_CHECKING
+from collections.abc import Callable
 from functools import lru_cache
 from inspect import signature
+from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
@@ -55,8 +56,8 @@ class MeshData(ABC):
         self,
         sim: "Simulation",
         var: str,
-        sampling: Sampling = ('x1v', 'x2v'),
-        ):
+        sampling: Sampling = ("x1v", "x2v"),
+    ):
         """
         Initialize the MeshData object.
 
@@ -67,14 +68,14 @@ class MeshData(ABC):
         """
         self.sim = sim
         if isinstance(sampling, str):
-            _conv = dict(x='x1v', y='x2v', z='x3v')
+            _conv = dict(x="x1v", y="x2v", z="x3v")
             self.sampling = (_conv[sampling[0]], _conv[sampling[1]])
         else:
             self.sampling = sampling
         self.var = var
 
     @abstractmethod
-    @lru_cache(maxsize=1)
+    @lru_cache(maxsize=1)  # noqa: B019 -- intentional per-instance cache of the last loaded snapshot
     def load_data(self, time: float) -> tuple:
         """
         Load data at the given time.
@@ -94,8 +95,8 @@ class MeshData(ABC):
         self,
         points: np.ndarray,
         time: float,
-        method: str = 'linear',
-        ) -> np.ndarray:
+        method: str = "linear",
+    ) -> np.ndarray:
         """
         Interpolate data at given points and time.
 
@@ -124,19 +125,19 @@ class MeshData(ABC):
         ymin, ymax = block_y[:, [n_ghosts, -n_ghosts]].T
 
         mask = (
-              (xp[None] >= xmin[:, None]) &
-              (xp[None] <= xmax[:, None]) &
-              (yp[None] >= ymin[:, None]) &
-              (yp[None] <= ymax[:, None])
-            )
+            (xp[None] >= xmin[:, None])
+            & (xp[None] <= xmax[:, None])
+            & (yp[None] >= ymin[:, None])
+            & (yp[None] <= ymax[:, None])
+        )
 
         idx = mask.argmax(axis=0)
         un_idx = np.unique(idx)
 
-        interp_data  = np.empty_like(xp)
+        interp_data = np.empty_like(xp)
 
         for ii in un_idx:
-            msk = (idx == ii)
+            msk = idx == ii
             x = block_x[ii]
             y = block_y[ii]
             data = block_data[ii]
@@ -147,7 +148,6 @@ class MeshData(ABC):
 
         interp_data[~mask.any(axis=0)] = np.nan
         return interp_data.reshape(point_shape)
-
 
 
 class Native(MeshData):
@@ -175,15 +175,15 @@ class Native(MeshData):
         self,
         sim: "Simulation",
         var: str,
-        sampling: Sampling = ('x1v', 'x2v'),
-        ):
+        sampling: Sampling = ("x1v", "x2v"),
+    ):
         super().__init__(sim, var, sampling)
         self.var, self.ghosts = sim.complete_var(var, self.sampling)
 
         self.iter_range = sim.scrape.get_available_iters(self.var, self.sampling)
         self.time_range = sim.scrape.get_available_times(self.var, self.sampling)
 
-    @lru_cache(maxsize=1)
+    @lru_cache(maxsize=1)  # noqa: B019 -- intentional per-instance cache of the last loaded snapshot
     def load_data(self, time: float, strip_ghosts: bool = True) -> tuple:
         """
         Load simulation data at the specified time.
@@ -201,8 +201,7 @@ class Native(MeshData):
         """
         it = self.sim.scrape.get_iter_from_time(self.var, self.sampling, time, self.ghosts)
 
-        out, _, dg, _ = self.sim.scrape.get_var_info(
-            self.var, self.sampling, self.ghosts)
+        out, _, dg, _ = self.sim.scrape.get_var_info(self.var, self.sampling, self.ghosts)
 
         if strip_ghosts:
             strip_dg = dg
@@ -212,14 +211,13 @@ class Native(MeshData):
         # grid + field data are read from the same file at the same
         # iteration; fetch them together to halve HDF5 opens per load.
         xyz, data = self.sim.scrape.get_grid_and_var(
-            out, self.var, self.sampling, iterate=it,
-            with_ghosts=self.ghosts, strip_dg=strip_dg)
+            out, self.var, self.sampling, iterate=it, with_ghosts=self.ghosts, strip_dg=strip_dg
+        )
         time = self.sim.scrape.get_iter_time(out, it)
         return xyz, data, time
 
     def __repr__(self):
         return f"<Native({self.var})>"
-
 
 
 class Derived(MeshData):
@@ -255,21 +253,25 @@ class Derived(MeshData):
         var: str,
         depends: tuple[str, ...],
         definition: Callable,
-        sampling: Sampling = ('x1v', 'x2v'),
-        ):
+        sampling: Sampling = ("x1v", "x2v"),
+    ):
         super().__init__(sim, var, sampling)
 
         self.depends = tuple(Native(sim, dep, sampling) for dep in depends)
         self.definition = definition
         self.signature = signature(self.definition)
 
-        self.iter_range = np.array([it for it in self.depends[0].iter_range
-                                    if all(np.isclose(it, dep.iter_range).any()
-                                           for dep in self.depends[1:])])
+        self.iter_range = np.array(
+            [
+                it
+                for it in self.depends[0].iter_range
+                if all(np.isclose(it, dep.iter_range).any() for dep in self.depends[1:])
+            ]
+        )
         out = sim.scrape.get_var_info(self.depends[0].var, self.sampling)[0]
         self.time_range = np.array([sim.scrape.get_iter_time(out, it) for it in self.iter_range])
 
-    @lru_cache(maxsize=1)
+    @lru_cache(maxsize=1)  # noqa: B019 -- intentional per-instance cache of the last loaded snapshot
     def load_data(self, time: float, strip_ghosts: bool = True) -> tuple:
         """
         Load and compute derived data at the specified time.
@@ -299,14 +301,16 @@ class Derived(MeshData):
         time = times[0]
         if not all(np.isclose(time, t) for t in times[1:]):
             raise RuntimeError(f"Not all dependencies for {self.var} have the same time slicing!")
-        kwargs = {name: value for name, value in (('xyz', xyz), ('time', time), ('sampling', self.sampling))
-                  if name in self.signature.parameters}
+        kwargs = {
+            name: value
+            for name, value in (("xyz", xyz), ("time", time), ("sampling", self.sampling))
+            if name in self.signature.parameters
+        }
         data = self.definition(*datas, **kwargs)
         return xyz, data, time
 
     def __repr__(self):
         return f"<Derived({self.var})>"
-
 
 
 class Vector(MeshData):
@@ -361,16 +365,22 @@ class Vector(MeshData):
 
         self.var = ",".join(comp.var for comp in components)
 
-        self.iter_range = np.array([it for it in self.components[0].iter_range
-                                    if all(np.isclose(it, dep.iter_range).any()
-                                           for dep in self.components[1:])])
+        self.iter_range = np.array(
+            [
+                it
+                for it in self.components[0].iter_range
+                if all(np.isclose(it, dep.iter_range).any() for dep in self.components[1:])
+            ]
+        )
         if isinstance(self.components[0], Derived):
             out = self.sim.scrape.get_var_info(self.components[0].depends[0].var, self.sampling)[0]
         else:
             out = self.sim.scrape.get_var_info(self.components[0].var, self.sampling)[0]
-        self.time_range = np.array([self.sim.scrape.get_iter_time(out, it) for it in self.iter_range])
+        self.time_range = np.array(
+            [self.sim.scrape.get_iter_time(out, it) for it in self.iter_range]
+        )
 
-    @lru_cache(maxsize=1)
+    @lru_cache(maxsize=1)  # noqa: B019 -- intentional per-instance cache of the last loaded snapshot
     def load_data(self, time: float) -> tuple:
         """
         Load vector data at the specified time.
@@ -410,8 +420,8 @@ class Vector(MeshData):
         self,
         points: np.ndarray,
         time: float,
-        method: str = 'linear',
-        ) -> np.ndarray:
+        method: str = "linear",
+    ) -> np.ndarray:
         """
         Interpolate vector data at given points and time.
 

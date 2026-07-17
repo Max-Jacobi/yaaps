@@ -5,10 +5,10 @@ This module provides utilities to configure matplotlib colormap and normalizatio
 settings for various variables commonly used in GRAthena++ simulations.
 """
 
-from typing import Callable
-import numpy as np
+from collections.abc import Callable
 
-from matplotlib.colors import LogNorm, Normalize, AsinhNorm, LinearSegmentedColormap
+import numpy as np
+from matplotlib.colors import AsinhNorm, LinearSegmentedColormap, LogNorm, Normalize
 
 
 def _update_defaults(**default) -> Callable[[dict], dict]:
@@ -22,55 +22,58 @@ def _update_defaults(**default) -> Callable[[dict], dict]:
         A function that takes a dict of kwargs and returns a merged dict
         with the defaults applied (provided kwargs take precedence).
     """
+
     def _inner(kwargs: dict) -> dict:
         return {**default, **kwargs}
+
     return _inner
 
-boundaries = [0, 2.5/6, 4/6, 5/6, 1]
-colors = ['firebrick', 'white', 'royalblue', 'gold', 'darkorange']
-ye_cmap = LinearSegmentedColormap.from_list("custom_cmap", list(zip(boundaries, colors)))
+
+boundaries = [0, 2.5 / 6, 4 / 6, 5 / 6, 1]
+colors = ["firebrick", "white", "royalblue", "gold", "darkorange"]
+ye_cmap = LinearSegmentedColormap.from_list(
+    "custom_cmap", list(zip(boundaries, colors, strict=False))
+)
 
 
 _color_kwargs_default: dict[str, Callable[[dict], dict]] = {
-    "hydro.prim.rho": _update_defaults(cmap='magma', norm='log'),
-    "passive_scalar.r_0": _update_defaults(cmap=ye_cmap, norm='lin', vmin=0, vmax=.6),
-    "hydro.aux.u_t": _update_defaults(cmap='RdBu', norm='lin', vmin=-1.1, vmax=-.9),
-    "hydro.aux.T": _update_defaults(cmap='hot', norm='lin'),
-    "hydro.aux.e": _update_defaults(cmap='plasma', norm='log'),
-    "hydro.aux.hu_t": _update_defaults(cmap='managua', norm='lin', vmin=-1.1, vmax=-.9),
-    "M1.lab.sc_E_00": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
-    "M1.lab.sc_E_01": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
-    "M1.lab.sc_E_02": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
-    "M1.lab.sc_nG_00": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
-    "M1.lab.sc_nG_01": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
-    "M1.lab.sc_nG_02": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
-    "M1.rad.sc_J_00": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
-    "M1.rad.sc_J_01": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
-    "M1.rad.sc_J_02": _update_defaults(cmap='plasma', norm='log', vmin=1e-14),
-    "M1.rad.sc_n_00": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
-    "M1.rad.sc_n_01": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
-    "M1.rad.sc_n_02": _update_defaults(cmap='viridis', norm='log', vmin=1e45),
-
-    "M1.radmat.sc_eta_00": _update_defaults(cmap='plasma', norm='log'),
-    "M1.radmat.sc_eta_01": _update_defaults(cmap='plasma', norm='log'),
-    "M1.radmat.sc_eta_02": _update_defaults(cmap='plasma', norm='log'),
-    "M1.radmat.sc_eta_0_00": _update_defaults(cmap='viridis', norm='log'),
-    "M1.radmat.sc_eta_0_01": _update_defaults(cmap='viridis', norm='log'),
-    "M1.radmat.sc_eta_0_02": _update_defaults(cmap='viridis', norm='log'),
-    "M1.radmat.sc_kap_a_00": _update_defaults(cmap='plasma', norm='log'),
-    "M1.radmat.sc_kap_a_01": _update_defaults(cmap='plasma', norm='log'),
-    "M1.radmat.sc_kap_a_00": _update_defaults(cmap='plasma', norm='log'),
-    "M1.radmat.sc_kap_a_0_00": _update_defaults(cmap='viridis', norm='log'),
-    "M1.radmat.sc_kap_a_0_01": _update_defaults(cmap='viridis', norm='log'),
-    "M1.radmat.sc_kap_a_0_02": _update_defaults(cmap='viridis', norm='log'),
-    "M1.radmat.sc_kap_s_00": _update_defaults(cmap='plasma', norm='log'),
-    "M1.radmat.sc_kap_s_01": _update_defaults(cmap='plasma', norm='log'),
-    "M1.radmat.sc_kap_s_02": _update_defaults(cmap='plasma', norm='log'),
-
-    "geom.con.H": _update_defaults(cmap='cubehelix', norm='log'),
-    "geom.con.M": _update_defaults(cmap='cubehelix', norm='log'),
-    "geom.con.C": _update_defaults(cmap='cubehelix', norm='log'),
-    "default": _update_defaults(cmap='viridis', norm='lin'),
+    "hydro.prim.rho": _update_defaults(cmap="magma", norm="log"),
+    "passive_scalar.r_0": _update_defaults(cmap=ye_cmap, norm="lin", vmin=0, vmax=0.6),
+    "hydro.aux.u_t": _update_defaults(cmap="RdBu", norm="lin", vmin=-1.1, vmax=-0.9),
+    "hydro.aux.T": _update_defaults(cmap="hot", norm="lin"),
+    "hydro.aux.e": _update_defaults(cmap="plasma", norm="log"),
+    "hydro.aux.hu_t": _update_defaults(cmap="managua", norm="lin", vmin=-1.1, vmax=-0.9),
+    "M1.lab.sc_E_00": _update_defaults(cmap="plasma", norm="log", vmin=1e-14),
+    "M1.lab.sc_E_01": _update_defaults(cmap="plasma", norm="log", vmin=1e-14),
+    "M1.lab.sc_E_02": _update_defaults(cmap="plasma", norm="log", vmin=1e-14),
+    "M1.lab.sc_nG_00": _update_defaults(cmap="viridis", norm="log", vmin=1e45),
+    "M1.lab.sc_nG_01": _update_defaults(cmap="viridis", norm="log", vmin=1e45),
+    "M1.lab.sc_nG_02": _update_defaults(cmap="viridis", norm="log", vmin=1e45),
+    "M1.rad.sc_J_00": _update_defaults(cmap="plasma", norm="log", vmin=1e-14),
+    "M1.rad.sc_J_01": _update_defaults(cmap="plasma", norm="log", vmin=1e-14),
+    "M1.rad.sc_J_02": _update_defaults(cmap="plasma", norm="log", vmin=1e-14),
+    "M1.rad.sc_n_00": _update_defaults(cmap="viridis", norm="log", vmin=1e45),
+    "M1.rad.sc_n_01": _update_defaults(cmap="viridis", norm="log", vmin=1e45),
+    "M1.rad.sc_n_02": _update_defaults(cmap="viridis", norm="log", vmin=1e45),
+    "M1.radmat.sc_eta_00": _update_defaults(cmap="plasma", norm="log"),
+    "M1.radmat.sc_eta_01": _update_defaults(cmap="plasma", norm="log"),
+    "M1.radmat.sc_eta_02": _update_defaults(cmap="plasma", norm="log"),
+    "M1.radmat.sc_eta_0_00": _update_defaults(cmap="viridis", norm="log"),
+    "M1.radmat.sc_eta_0_01": _update_defaults(cmap="viridis", norm="log"),
+    "M1.radmat.sc_eta_0_02": _update_defaults(cmap="viridis", norm="log"),
+    "M1.radmat.sc_kap_a_00": _update_defaults(cmap="plasma", norm="log"),
+    "M1.radmat.sc_kap_a_01": _update_defaults(cmap="plasma", norm="log"),
+    "M1.radmat.sc_kap_a_02": _update_defaults(cmap="plasma", norm="log"),
+    "M1.radmat.sc_kap_a_0_00": _update_defaults(cmap="viridis", norm="log"),
+    "M1.radmat.sc_kap_a_0_01": _update_defaults(cmap="viridis", norm="log"),
+    "M1.radmat.sc_kap_a_0_02": _update_defaults(cmap="viridis", norm="log"),
+    "M1.radmat.sc_kap_s_00": _update_defaults(cmap="plasma", norm="log"),
+    "M1.radmat.sc_kap_s_01": _update_defaults(cmap="plasma", norm="log"),
+    "M1.radmat.sc_kap_s_02": _update_defaults(cmap="plasma", norm="log"),
+    "geom.con.H": _update_defaults(cmap="cubehelix", norm="log"),
+    "geom.con.M": _update_defaults(cmap="cubehelix", norm="log"),
+    "geom.con.C": _update_defaults(cmap="cubehelix", norm="log"),
+    "default": _update_defaults(cmap="viridis", norm="lin"),
 }
 
 var_alias: dict[str, str] = {
@@ -81,14 +84,12 @@ var_alias: dict[str, str] = {
     "util_x": "hydro.prim.util_u_1",
     "util_y": "hydro.prim.util_u_2",
     "util_z": "hydro.prim.util_u_3",
-
     "B_x": "B.Bcc_1",
     "B_y": "B.Bcc_2",
     "B_z": "B.Bcc_3",
     "b_x": "field.aux.b_u_1",
     "b_y": "field.aux.b_u_2",
     "b_z": "field.aux.b_u_3",
-
     "m1_E_e": "M1.lab.sc_E_00",
     "m1_E_ae": "M1.lab.sc_E_01",
     "m1_E_x": "M1.lab.sc_E_02",
@@ -101,7 +102,6 @@ var_alias: dict[str, str] = {
     "m1_n_e": "M1.rad.sc_n_00",
     "m1_n_ae": "M1.rad.sc_n_01",
     "m1_n_x": "M1.rad.sc_n_02",
-
     "m1_eta_1_e": "M1.radmat.sc_eta_00",
     "m1_eta_1_ae": "M1.radmat.sc_eta_01",
     "m1_eta_1_x": "M1.radmat.sc_eta_02",
@@ -117,10 +117,10 @@ var_alias: dict[str, str] = {
     "m1_scat_1_e": "M1.radmat.sc_kap_s_00",
     "m1_scat_1_ae": "M1.radmat.sc_kap_s_01",
     "m1_scat_1_x": "M1.radmat.sc_kap_s_02",
-
 }
 
 reverse_var_alias = {v: k for k, v in var_alias.items()}
+
 
 def update_color_kwargs(var: str, kwargs: dict, data: np.ndarray) -> dict:
     """
@@ -144,44 +144,44 @@ def update_color_kwargs(var: str, kwargs: dict, data: np.ndarray) -> dict:
     """
     if var in _color_kwargs_default:
         kwargs = _color_kwargs_default[var](kwargs)
-    else: # default
-        kwargs = _color_kwargs_default['default'](kwargs)
+    else:  # default
+        kwargs = _color_kwargs_default["default"](kwargs)
 
-    if 'norm' not in kwargs:
-        kwargs['norm'] = 'lin'
+    if "norm" not in kwargs:
+        kwargs["norm"] = "lin"
 
-    if isinstance(kwargs['norm'], str):
-        norm = kwargs.pop('norm', 'lin')
+    if isinstance(kwargs["norm"], str):
+        norm = kwargs.pop("norm", "lin")
         fdata = data.copy()
-        if 'vmin' not in kwargs or 'vmax' not in kwargs:
+        if "vmin" not in kwargs or "vmax" not in kwargs:
             fdata = fdata[np.isfinite(data)]
-        if norm == 'log':
-            if (len(fdata[fdata>0])>0):
-                fdata = fdata[fdata>0]
+        if norm == "log":
+            if len(fdata[fdata > 0]) > 0:
+                fdata = fdata[fdata > 0]
             else:
-                norm='lin'
+                norm = "lin"
 
-        if 'vmin' in kwargs:
-            vmin = kwargs.pop('vmin')
+        if "vmin" in kwargs:
+            vmin = kwargs.pop("vmin")
         else:
             vmin = fdata.min()
 
-        if 'vmax' in kwargs:
-            vmax = kwargs.pop('vmax')
+        if "vmax" in kwargs:
+            vmax = kwargs.pop("vmax")
         else:
             vmax = fdata.max()
 
-        if norm == 'log':
-            kwargs['norm'] = LogNorm(vmin=vmin, vmax=vmax)
-        elif norm == 'lin':
-            kwargs['norm'] = Normalize(vmin=vmin, vmax=vmax)
-        elif norm == 'asinh':
+        if norm == "log":
+            kwargs["norm"] = LogNorm(vmin=vmin, vmax=vmax)
+        elif norm == "lin":
+            kwargs["norm"] = Normalize(vmin=vmin, vmax=vmax)
+        elif norm == "asinh":
             absvmax = max(abs(vmax), abs(vmin))
-            lin_width = kwargs.pop('linear_width', absvmax*1e-7)
-            kwargs['norm'] = AsinhNorm(linear_width=lin_width, vmin=vmin, vmax=vmax)
+            lin_width = kwargs.pop("linear_width", absvmax * 1e-7)
+            kwargs["norm"] = AsinhNorm(linear_width=lin_width, vmin=vmin, vmax=vmax)
         else:
-            raise ValueError(f'Unknown norm: {norm}')
+            raise ValueError(f"Unknown norm: {norm}")
     else:
-        vmin = kwargs.pop('vmin', None)
-        vmax = kwargs.pop('vmax', None)
+        vmin = kwargs.pop("vmin", None)
+        vmax = kwargs.pop("vmax", None)
     return kwargs
