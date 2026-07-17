@@ -22,16 +22,15 @@ directory, the file with the newer mtime wins - so no external "combine"
 step (symlink farm + ascii concatenation) is needed beforehand.
 """
 
+import bisect
+import json
 import os
 import re
-import json
-import bisect
 import warnings
 from functools import lru_cache
-from typing import Union
 
-import numpy as np
 import h5py
+import numpy as np
 
 
 class IterationNotAvailable(LookupError):
@@ -56,7 +55,8 @@ def find_restart_dirs(path: str) -> list[str]:
     """
     try:
         subdirs = sorted(
-            entry.name for entry in os.scandir(path)
+            entry.name
+            for entry in os.scandir(path)
             if entry.is_dir() and entry.name.startswith(_RESTART_PREFIX)
         )
     except OSError:
@@ -76,7 +76,7 @@ def _split_chunks(flat: list, sizes: list) -> list:
     chunks = []
     i = 0
     for size in sizes:
-        chunks.append(list(flat[i:i + size]))
+        chunks.append(list(flat[i : i + size]))
         i += size
     return chunks
 
@@ -98,8 +98,10 @@ class AthdfScraper:
     """
 
     def __init__(
-        self, dir_data: str, N_B: Union[int, float, list, tuple],
-        source_dirs: Union[list, None] = None,
+        self,
+        dir_data: str,
+        N_B: int | float | list | tuple,
+        source_dirs: list | None = None,
     ):
         self.dir_data = os.path.abspath(dir_data)
         if isinstance(N_B, (int, float)):
@@ -107,7 +109,9 @@ class AthdfScraper:
         self.N_B = tuple(int(v) for v in N_B)
         # caller (Simulation) may already know the restart-directory listing
         # from its own setup - reuse it instead of re-scanning dir_data.
-        self._source_dirs = source_dirs if source_dirs is not None else find_restart_dirs(self.dir_data)
+        self._source_dirs = (
+            source_dirs if source_dirs is not None else find_restart_dirs(self.dir_data)
+        )
 
         self._stems: dict[str, str] = {}
         self._fns: dict[str, dict[int, str]] = {}
@@ -158,9 +162,7 @@ class AthdfScraper:
             raise RuntimeError(f"No athdf files found under {self.dir_data}")
 
         sorted_raw = {
-            out: sorted(
-                ((it, *info) for it, info in bucket.items()), key=lambda item: item[0]
-            )
+            out: sorted(((it, *info) for it, info in bucket.items()), key=lambda item: item[0])
             for out, bucket in raw.items()
         }
 
@@ -175,7 +177,7 @@ class AthdfScraper:
             cache_entries: dict[str, dict] = {}
 
             n_files = len(files)
-            for i, (it, name, fn_abs, mtime, size) in enumerate(files):
+            for i, (it, _name, fn_abs, mtime, size) in enumerate(files):
                 is_last = i == n_files - 1
                 rel = os.path.relpath(fn_abs, self.dir_data)
                 cached_entry = cached_iters.get(str(it))
@@ -183,7 +185,10 @@ class AthdfScraper:
                     not is_last
                     and cached_entry is not None
                     and cached_entry.get("filename") == rel
-                    and cached_entry.get("mtime") == mtime
+                    # int()-truncate: sshfs reports whole-second mtimes, so a
+                    # cache written locally would otherwise never match there
+                    # (size is also checked, so this is safe).
+                    and int(cached_entry.get("mtime", -1)) == int(mtime)
                     and cached_entry.get("size") == size
                 )
                 if reuse:
@@ -200,8 +205,12 @@ class AthdfScraper:
                             # that - matters a lot on slow/network filesystems.
                             if i == 0 and out not in self._out_dataset_names:
                                 self._out_dataset_names[out] = _decode_attr(f.attrs["DatasetNames"])
-                                self._out_variable_names[out] = _decode_attr(f.attrs["VariableNames"])
-                                self._out_num_variables[out] = tuple(int(v) for v in f.attrs["NumVariables"])
+                                self._out_variable_names[out] = _decode_attr(
+                                    f.attrs["VariableNames"]
+                                )
+                                self._out_num_variables[out] = tuple(
+                                    int(v) for v in f.attrs["NumVariables"]
+                                )
                             if is_last:
                                 dataset_names = self._out_dataset_names.get(out)
                                 if dataset_names is None:
@@ -212,6 +221,7 @@ class AthdfScraper:
                             warnings.warn(
                                 f"Could not read Time from {fn_abs}; skipping.",
                                 RuntimeWarning,
+                                stacklevel=2,
                             )
                         # last file of an out-set being unreadable means the
                         # simulation is still actively writing it - skip
@@ -221,7 +231,10 @@ class AthdfScraper:
                 fns[it] = fn_abs
                 times[it] = time_val
                 cache_entries[str(it)] = {
-                    "filename": rel, "mtime": mtime, "size": size, "time": time_val,
+                    "filename": rel,
+                    "mtime": mtime,
+                    "size": size,
+                    "time": time_val,
                 }
 
             if not fns:
@@ -237,11 +250,13 @@ class AthdfScraper:
         if not self._fns:
             raise RuntimeError(f"No readable athdf files found under {self.dir_data}")
 
-        self._save_cache({
-            "version": _CACHE_VERSION,
-            "N_B": list(self.N_B),
-            "out_sets": new_cache_out_sets,
-        })
+        self._save_cache(
+            {
+                "version": _CACHE_VERSION,
+                "N_B": list(self.N_B),
+                "out_sets": new_cache_out_sets,
+            }
+        )
 
         for out in self._fns:
             if out in self._out_dataset_names:
@@ -255,9 +270,9 @@ class AthdfScraper:
     def _cache_path(self) -> str:
         return os.path.join(self.dir_data, _CACHE_BASENAME)
 
-    def _load_cache(self) -> Union[dict, None]:
+    def _load_cache(self) -> dict | None:
         try:
-            with open(self._cache_path(), "r") as f:
+            with open(self._cache_path()) as f:
                 data = json.load(f)
         except (OSError, ValueError):
             return None
@@ -310,7 +325,7 @@ class AthdfScraper:
     def _get_ghosts(self, dim_xyz: tuple, N_B: tuple) -> tuple:
         dg = []
         have_ghosts = True
-        for d, N in zip(dim_xyz, N_B):
+        for d, N in zip(dim_xyz, N_B, strict=False):
             if d > 1:
                 cur_dg = abs(d - N) // 2
                 have_ghosts = have_ghosts and (cur_dg > 1)
@@ -327,9 +342,7 @@ class AthdfScraper:
             slicing = tuple(f"x{ix}" for ix in range(1, 4) if dim_xyz[ix - 1] > 1)
 
             dataset_names = self._out_dataset_names[out]
-            vars_split = _split_chunks(
-                self._out_variable_names[out], self._out_num_variables[out]
-            )
+            vars_split = _split_chunks(self._out_variable_names[out], self._out_num_variables[out])
             have_ghosts, dg = self._get_ghosts(dim_xyz, self.N_B)
             self._out_ng[out] = (dim_xyz, dg)
 
@@ -344,7 +357,7 @@ class AthdfScraper:
                 var_map[(var, slicing, have_ghosts)] = (out, var_index, dg, dataset_name)
         return var_map
 
-    @lru_cache(maxsize=None, typed=True)
+    @lru_cache(maxsize=None, typed=True)  # noqa: B019 -- intentional cache on long-lived scraper instance
     def _parse_var_info(self, var: str, sampling, with_ghosts: bool = True) -> tuple:
         if isinstance(sampling, str):
             sampling = (sampling,)
@@ -413,13 +426,13 @@ class AthdfScraper:
         except KeyError:
             available = sorted(self._fns.get(out, {}))
             pos = bisect.bisect_left(available, int(iterate))
-            nearby = available[max(0, pos - 3):pos + 3]
+            nearby = available[max(0, pos - 3) : pos + 3]
             raise IterationNotAvailable(
                 f"Iteration {iterate} not found for out={out!r} in {self.dir_data!r}. "
                 f"Nearby available iterations: {nearby}"
             ) from None
 
-    @lru_cache(maxsize=None, typed=True)
+    @lru_cache(maxsize=None, typed=True)  # noqa: B019 -- intentional cache on long-lived scraper instance
     def slicer_physical(self, ng: int, sampling, dg=None) -> tuple:
         """Given a ghost zone count and sampling, build slicers to physical nodes."""
         var_sl = []
@@ -448,7 +461,7 @@ class AthdfScraper:
         if strip_dg > 0:
             _, ng = self._out_ng[out]
             var_sl, _ = self.slicer_physical(ng, sampling, dg=ng - strip_dg)
-            xyz = tuple(gr[sl] for gr, sl in zip(xyz, var_sl))
+            xyz = tuple(gr[sl] for gr, sl in zip(xyz, var_sl, strict=False))
         else:
             xyz = tuple(xyz)
         return xyz
@@ -460,8 +473,12 @@ class AthdfScraper:
             return np.array(f["Levels"])
 
     def get_var(
-        self, var: str, sampling, iterate: int = 0,
-        with_ghosts: bool = True, strip_dg: int = 0,
+        self,
+        var: str,
+        sampling,
+        iterate: int = 0,
+        with_ghosts: bool = True,
+        strip_dg: int = 0,
     ) -> np.ndarray:
         """Extract field data for a variable at a given iteration."""
         sampling, var_info = self._parse_var_info(var, sampling, with_ghosts)
@@ -474,8 +491,13 @@ class AthdfScraper:
         return self._extract_var(dataset, var_index, out, sampling, strip_dg)
 
     def get_grid_and_var(
-        self, out: str, var: str, sampling, iterate: int = 0,
-        with_ghosts: bool = True, strip_dg: int = 0,
+        self,
+        out: str,
+        var: str,
+        sampling,
+        iterate: int = 0,
+        with_ghosts: bool = True,
+        strip_dg: int = 0,
     ) -> tuple:
         """
         Extract grid coordinates and field data for a variable together, in a
@@ -495,13 +517,15 @@ class AthdfScraper:
         if strip_dg > 0:
             _, ng = self._out_ng[out]
             var_sl, _ = self.slicer_physical(ng, sampling, dg=ng - strip_dg)
-            xyz = tuple(gr[sl] for gr, sl in zip(xyz, var_sl))
+            xyz = tuple(gr[sl] for gr, sl in zip(xyz, var_sl, strict=False))
         else:
             xyz = tuple(xyz)
 
         return xyz, field_data
 
-    def _extract_var(self, dataset, var_index: int, out: str, sampling, strip_dg: int) -> np.ndarray:
+    def _extract_var(
+        self, dataset, var_index: int, out: str, sampling, strip_dg: int
+    ) -> np.ndarray:
         field_data = np.transpose(dataset[var_index], (0, 3, 2, 1)).squeeze()
 
         if strip_dg > 0:

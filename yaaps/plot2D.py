@@ -7,27 +7,27 @@ stream plots, mesh block overlays, and animations. It supports both native
 (direct from file) and derived (computed from multiple variables) quantities.
 """
 
-from abc import ABC, abstractmethod
-from typing import Callable, Sequence, TYPE_CHECKING, Mapping
-from collections.abc import Iterable
 import os
+from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING
 
-import numpy as  np
-from scipy.interpolate import griddata
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
-from matplotlib.collections import PatchCollection, PathCollection
+import numpy as np
 from matplotlib.animation import FuncAnimation
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
 from matplotlib.artist import Artist
+from matplotlib.axes import Axes
+from matplotlib.collections import PatchCollection, PathCollection
+from matplotlib.figure import Figure
+from matplotlib.patches import Rectangle
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
+from scipy.interpolate import griddata
 from tqdm import tqdm
 
+from .datatypes import Derived, MeshData, Native, Sampling, Vector
 from .decorations import update_color_kwargs
-from .recipes2D import *
-from .datatypes import MeshData, Native, Derived, Vector, Sampling
 from .plot_formatter import PlotFormatter, PlotFormatterBase, PlotMode
+
 if TYPE_CHECKING:
     from .simulation import Simulation
 
@@ -36,8 +36,8 @@ def interpolate_octree_to_grid(
     octree_xyz: tuple[np.ndarray, np.ndarray],
     octree_data: np.ndarray,
     grid_xyz: tuple[np.ndarray, np.ndarray],
-    method: str = 'linear',
-    ) -> np.ndarray:
+    method: str = "linear",
+) -> np.ndarray:
     """
     Interpolate data defined on an octree mesh to a regular grid.
 
@@ -58,8 +58,8 @@ def interpolate_octree_to_grid(
     octree_x = np.empty_like(octree_data)
     octree_y = np.empty_like(octree_data)
 
-    for i, (x, y) in enumerate(zip(*octree_xyz)):
-        octree_x[i], octree_y[i] = np.meshgrid(x, y, indexing='ij')
+    for i, (x, y) in enumerate(zip(*octree_xyz, strict=False)):
+        octree_x[i], octree_y[i] = np.meshgrid(x, y, indexing="ij")
 
     octree_x = octree_x.ravel()
     octree_y = octree_y.ravel()
@@ -67,10 +67,12 @@ def interpolate_octree_to_grid(
 
     points = np.column_stack((octree_x, octree_y))
 
-    xi = np.column_stack((
-        np.repeat(grid_xyz[0], len(grid_xyz[1])),
-        np.tile(grid_xyz[1], len(grid_xyz[0])),
-    ))
+    xi = np.column_stack(
+        (
+            np.repeat(grid_xyz[0], len(grid_xyz[1])),
+            np.tile(grid_xyz[1], len(grid_xyz[0])),
+        )
+    )
     grid_data = griddata(
         points=points,
         values=values,
@@ -176,7 +178,6 @@ class Plot(ABC):
         return animate(*args, fig=self.ax.figure, plots=(self,), **kwargs)
 
 
-
 class TimeBarPlot(Plot):
     """
     A vertical line plot that moves with time.
@@ -194,10 +195,7 @@ class TimeBarPlot(Plot):
     """
 
     def __init__(
-        self,
-        ax: (Axes | None),
-        formatter: PlotFormatterBase | str | None = None,
-        **kwargs
+        self, ax: (Axes | None), formatter: PlotFormatterBase | str | None = None, **kwargs
     ):
         super().__init__(ax=ax, formatter=formatter)
         self.li = self.ax.axvline(0, **kwargs)
@@ -237,7 +235,7 @@ class MeshBlockPlot(Plot):
         data: MeshData,
         ax: (Axes | None) = None,
         **kwargs,
-        ):
+    ):
         """
         Initialize mesh block overlay rendering.
 
@@ -253,10 +251,10 @@ class MeshBlockPlot(Plot):
         self.data = data
 
         self.mb_kwargs = kwargs
-        self.mb_kwargs.setdefault('edgecolor', 'gray')
-        self.mb_kwargs.setdefault('facecolor', 'none')
-        self.mb_kwargs.setdefault('linewidth', 0.5)
-        self.mb_kwargs.setdefault('alpha', 0.2)
+        self.mb_kwargs.setdefault("edgecolor", "gray")
+        self.mb_kwargs.setdefault("facecolor", "none")
+        self.mb_kwargs.setdefault("linewidth", 0.5)
+        self.mb_kwargs.setdefault("alpha", 0.2)
         self.collection = PatchCollection([], match_original=True)
         self.ax.add_collection(self.collection)
 
@@ -271,22 +269,22 @@ class MeshBlockPlot(Plot):
             List containing the PatchCollection artist.
         """
 
-
-        xyz, *_ = self.data.load_data(time+self.t_off) # should be lru_cached
-        if self.data.sampling[0].endswith('v'):
-            coll = [Rectangle(
-                (1.5*x1[0] - 0.5*x1[1], 1.5*x2[0] - 0.5*x2[1]),
-                x1[-1]-2*x1[0] + x1[1],
-                x2[-1]-2*x2[0] + x2[1],
-                **self.mb_kwargs
-                ) for (x1, x2) in zip(*xyz)]
+        xyz, *_ = self.data.load_data(time + self.t_off)  # should be lru_cached
+        if self.data.sampling[0].endswith("v"):
+            coll = [
+                Rectangle(
+                    (1.5 * x1[0] - 0.5 * x1[1], 1.5 * x2[0] - 0.5 * x2[1]),
+                    x1[-1] - 2 * x1[0] + x1[1],
+                    x2[-1] - 2 * x2[0] + x2[1],
+                    **self.mb_kwargs,
+                )
+                for (x1, x2) in zip(*xyz, strict=False)
+            ]
         else:
-            coll = [Rectangle(
-                (x1[0], x2[0]),
-                x1[-1]-x1[0],
-                x2[-1]-x2[0],
-                **self.mb_kwargs
-                ) for (x1, x2) in zip(*xyz)]
+            coll = [
+                Rectangle((x1[0], x2[0]), x1[-1] - x1[0], x2[-1] - x2[0], **self.mb_kwargs)
+                for (x1, x2) in zip(*xyz, strict=False)
+            ]
         self.collection = PatchCollection(coll, match_original=True)
         self.ax.add_collection(self.collection)
         return [self.collection]
@@ -316,7 +314,7 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
         ims: List of pcolormesh artists created.
     """
 
-    cax: (Axes | None) = None
+    cax: Axes | None = None
     cbar: bool = False
     data: DataType
     mb_plot: MeshBlockPlot | None
@@ -329,7 +327,8 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
         func: Callable | None = None,
         formatter: PlotFormatterBase | str | None = None,
         draw_meshblocks: bool = False,
-        **kwargs):
+        **kwargs,
+    ):
         """
         Initialize the color plot.
 
@@ -360,13 +359,12 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
         else:
             self.mb_plot = None
 
-
         # Set axis labels using formatter
         x_label = self.formatter.format_axis_label(self.data.sampling[0])
         y_label = self.formatter.format_axis_label(self.data.sampling[1])
         self.ax.set_xlabel(x_label)
         self.ax.set_ylabel(y_label)
-        self.ax.set_aspect('equal')
+        self.ax.set_aspect("equal")
 
         self.func = func
         self.kwargs = kwargs
@@ -384,7 +382,7 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
             List of QuadMesh artists created.
         """
         self.clean()
-        xyz, data, actual_time = self.data.load_data(time+self.t_off)
+        xyz, data, actual_time = self.data.load_data(time + self.t_off)
 
         # Apply data transformation if specified
         if self.func is not None:
@@ -400,10 +398,10 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
         self.kwargs = update_color_kwargs(self.data.var, self.kwargs, data=data)
 
         # Set title using formatter
-        self.ax.set_title(self.formatter.format_title(self.data.var, actual_time-self.t_off))
+        self.ax.set_title(self.formatter.format_title(self.data.var, actual_time - self.t_off))
 
-        for fd, xx, yy in zip(data, *converted_xyz):
-            coords = np.meshgrid(xx, yy, indexing='ij')
+        for fd, xx, yy in zip(data, *converted_xyz, strict=False):
+            coords = np.meshgrid(xx, yy, indexing="ij")
             self.ims.append(self.ax.pcolormesh(*coords, fd, **self.kwargs))
         artists = self.ims.copy()
 
@@ -428,6 +426,7 @@ class ColorPlot[DataType: MeshData](Plot, ABC):
         if self.mb_plot is not None:
             self.mb_plot.clean()
 
+
 class ScatterPlot(Plot, ABC):
     """
     Abstract base class for scatter plots.
@@ -443,7 +442,7 @@ class ScatterPlot(Plot, ABC):
         kwargs: Keyword arguments for scatter.
     """
 
-    cax: (Axes | None) = None
+    cax: Axes | None = None
     cbar: bool = False
     scat: PathCollection
 
@@ -455,7 +454,7 @@ class ScatterPlot(Plot, ABC):
         with_c: bool = False,
         formatter: PlotFormatterBase | str | None = None,
         **kwargs,
-        ) -> list[Artist]:
+    ) -> list[Artist]:
         """
         Initialize the scatter plot.
 
@@ -481,13 +480,13 @@ class ScatterPlot(Plot, ABC):
             self.cax = cbar
 
         self.kwargs = kwargs
-        x = [np.nan]*n_points
-        y = [np.nan]*n_points
+        x = [np.nan] * n_points
+        y = [np.nan] * n_points
         if with_c:
-            c = [np.nan]*n_points
+            c = [np.nan] * n_points
             self.scat = self.ax.scatter(x, y, c=c, **self.kwargs)
         else:
-            self.scat = self.ax.scatter(x, y,  **self.kwargs)
+            self.scat = self.ax.scatter(x, y, **self.kwargs)
         return [self.scat]
 
     def make_plot(
@@ -495,7 +494,7 @@ class ScatterPlot(Plot, ABC):
         xyz: tuple[np.ndarray, np.ndarray],
         c: np.ndarray | None,
         time: float,
-        ) -> list[Artist]:
+    ) -> list[Artist]:
         """
         Update the scatter plot with new positions and colors.
 
@@ -554,10 +553,10 @@ class NativeColorPlot(ColorPlot[Native]):
         self,
         sim: "Simulation",
         var: str,
-        sampling: Sampling = ('x1v', 'x2v'),
+        sampling: Sampling = ("x1v", "x2v"),
         t_merg_offset: bool = True,
-        **kwargs
-        ):
+        **kwargs,
+    ):
         data = Native(sim, var, sampling)
         if "t_merg" in sim.md and t_merg_offset:
             self.t_off = sim.md["t_merg"]
@@ -593,15 +592,14 @@ class DerivedColorPlot(ColorPlot[Derived]):
         var: str,
         depends: tuple[str, ...],
         definition: Callable,
-        sampling: Sampling = ('x1v', 'x2v'),
+        sampling: Sampling = ("x1v", "x2v"),
         t_merg_offset: bool = True,
-        **kwargs
-        ):
+        **kwargs,
+    ):
         data = Derived(sim, var, depends, definition, sampling)
         if "t_merg" in sim.md and t_merg_offset:
             self.t_off = sim.md["t_merg"]
         super().__init__(data=data, **kwargs)
-
 
 
 class TracerPlot(ScatterPlot):
@@ -633,13 +631,15 @@ class TracerPlot(ScatterPlot):
     def __init__(
         self,
         tracers: list[Mapping],
-        coord_keys: tuple[str, ...] = ('x1', 'x2'),
+        coord_keys: tuple[str, ...] = ("x1", "x2"),
         color_key: str | None = None,
         trail_len: float = 0,
-        line_kwargs: dict = {},
+        line_kwargs: dict | None = None,
         formatter: PlotFormatterBase | str | None = None,
-        **kwargs
+        **kwargs,
     ):
+        if line_kwargs is None:
+            line_kwargs = {}
         self.tracers = tracers
         n_tracers = len(tracers)
         self._formatter = formatter
@@ -654,15 +654,13 @@ class TracerPlot(ScatterPlot):
         self.y = np.full(n_tracers, np.nan)
         if self.color_key is not None:
             self.c: np.ndarray | None = np.full(n_tracers, np.nan)
-            if not ('norm' in self.kwargs or
-                    ('vmin' in self.kwargs and 'vmax' in self.kwargs)):
-                print('Warning: no normalization set for color scale')
+            if not ("norm" in self.kwargs or ("vmin" in self.kwargs and "vmax" in self.kwargs)):
+                print("Warning: no normalization set for color scale")
         else:
             self.c = None
 
-        self.lines = [self.ax.plot([], [], **self.line_kwargs)[0]
-                      for _ in self.tracers]
-        self.ax.set_aspect('equal')
+        self.lines = [self.ax.plot([], [], **self.line_kwargs)[0] for _ in self.tracers]
+        self.ax.set_aspect("equal")
 
     def plot(self, time: float) -> list[Artist]:
         """
@@ -678,7 +676,7 @@ class TracerPlot(ScatterPlot):
             List of scatter and line artists.
         """
         for ii, tr in enumerate(self.tracers):
-            tr_t = tr['time']
+            tr_t = tr["time"]
             tr_x = tr[self.coord_keys[0]]
             tr_y = tr[self.coord_keys[1]]
 
@@ -696,12 +694,12 @@ class TracerPlot(ScatterPlot):
 
             if self.trail_len > 0:
                 if (time - self.trail_len) >= tr_t.min():
-                    x_tr = np.interp(time-self.trail_len, tr_t, tr_x)
-                    y_tr = np.interp(time-self.trail_len, tr_t, tr_y)
+                    x_tr = np.interp(time - self.trail_len, tr_t, tr_x)
+                    y_tr = np.interp(time - self.trail_len, tr_t, tr_y)
                     self.lines[ii].set_data([x_tr, self.x[ii]], [y_tr, self.y[ii]])
 
-        converted_x = self.formatter.convert_coordinate('x1v', self.x)
-        converted_y = self.formatter.convert_coordinate('x2v', self.y)
+        converted_x = self.formatter.convert_coordinate("x1v", self.x)
+        converted_y = self.formatter.convert_coordinate("x2v", self.y)
 
         return self.make_plot((converted_x, converted_y), c=self.c, time=time)
 
@@ -758,8 +756,13 @@ class QuiverPlot(Plot):
         self.grid = np.stack((x_grid.ravel(), y_grid.ravel())).T
         converted_x_grid = self.formatter.convert_coordinate(data.sampling[0], x_grid)
         converted_y_grid = self.formatter.convert_coordinate(data.sampling[1], y_grid)
-        self.quiv = self.ax.quiver(converted_x_grid, converted_y_grid,
-                                   np.zeros_like(x_grid), np.zeros_like(y_grid), **self.kwargs)
+        self.quiv = self.ax.quiver(
+            converted_x_grid,
+            converted_y_grid,
+            np.zeros_like(x_grid),
+            np.zeros_like(y_grid),
+            **self.kwargs,
+        )
 
     def plot(self, time: float) -> list[Artist]:
         """
@@ -773,7 +776,7 @@ class QuiverPlot(Plot):
         """
         # Set title using formatter
         self.ax.set_title(self.formatter.format_title(self.data.var, time))
-        u_grid, v_grid = self.data.interp(self.grid, time=time+self.t_off)
+        u_grid, v_grid = self.data.interp(self.grid, time=time + self.t_off)
         if self.func is not None:
             u_grid, v_grid = self.func(u_grid, v_grid)
         self.quiv.set_UVC(u_grid, v_grid)
@@ -806,7 +809,7 @@ class QuiverPlot(Plot):
             else:
                 x_grid = np.linspace(-bounds, bounds, N_x)
                 y_grid = np.linspace(-bounds, bounds, N_y)
-            x_grid, y_grid = np.meshgrid(x_grid, y_grid, indexing='ij')
+            x_grid, y_grid = np.meshgrid(x_grid, y_grid, indexing="ij")
         elif self.grid_type == "polar":
             if isinstance(bounds, Iterable):
                 r_min, r_max, ph_min, ph_max = bounds
@@ -814,13 +817,15 @@ class QuiverPlot(Plot):
                 ph_grid = np.linspace(ph_min, ph_max, N_y)
             else:
                 r_grid = np.linspace(-bounds, bounds, N_x)
-                ph_grid = np.linspace(0, 2*np.pi, N_y+1)[:-1]
-            r_grid, ph_grid = np.meshgrid(r_grid, ph_grid, indexing='ij')
+                ph_grid = np.linspace(0, 2 * np.pi, N_y + 1)[:-1]
+            r_grid, ph_grid = np.meshgrid(r_grid, ph_grid, indexing="ij")
             cph = np.cos(ph_grid)
-            x_grid = cph*r_grid
-            y_grid = np.sqrt(1-cph*cph)*r_grid
+            x_grid = cph * r_grid
+            y_grid = np.sqrt(1 - cph * cph) * r_grid
         else:
-            raise ValueError(f'Uknown grid_type: {self.grid_type}. Implemented are "cartesian" and "polar"')
+            raise ValueError(
+                f'Uknown grid_type: {self.grid_type}. Implemented are "cartesian" and "polar"'
+            )
 
         return x_grid, y_grid
 
@@ -871,8 +876,9 @@ class StreamPlot(Plot):
         self.grid = np.stack(np.meshgrid(self.x_grid, self.y_grid), axis=-1)
         u_grid = np.zeros((len(self.y_grid), len(self.x_grid)))
         v_grid = np.zeros((len(self.y_grid), len(self.x_grid)))
-        self.stream = self.ax.streamplot(self.converted_x_grid, self.converted_y_grid,
-                                         u_grid, v_grid, **self.kwargs)
+        self.stream = self.ax.streamplot(
+            self.converted_x_grid, self.converted_y_grid, u_grid, v_grid, **self.kwargs
+        )
         sim = data.sim
         if "t_merg" in sim.md and t_merg_offset:
             self.t_off = sim.md["t_merg"]
@@ -890,9 +896,10 @@ class StreamPlot(Plot):
         self.clean()
         # Set title using formatter
         self.ax.set_title(self.formatter.format_title(self.data.var, time))
-        u_grid, v_grid = self.data.interp(self.grid, time=time+self.t_off)
-        self.stream = self.ax.streamplot(self.converted_x_grid, self.converted_y_grid,
-                                         u_grid, v_grid, **self.kwargs)
+        u_grid, v_grid = self.data.interp(self.grid, time=time + self.t_off)
+        self.stream = self.ax.streamplot(
+            self.converted_x_grid, self.converted_y_grid, u_grid, v_grid, **self.kwargs
+        )
         return [self.stream.lines, self.stream.arrows]
 
     def _create_grid(self, bounds, N_arrows) -> tuple[np.ndarray, np.ndarray]:
@@ -956,12 +963,12 @@ def animate(
     """
     if pbar:
         bar = tqdm(
-            ncols=0 ,
-            desc='Animating ',
-            unit='frame',
+            ncols=0,
+            desc="Animating ",
+            unit="frame",
             total=len(times),
             leave=False,
-            )
+        )
     else:
         bar = None
 
@@ -1024,9 +1031,17 @@ def save_frames(
     todo = enumerate(times)
 
     def bar(*args, **kwargs):
-        kwargs = {**dict(total=total, desc="Saving frames", ncols=0,
-                         unit="frame", leave=False, disable=not pbar),
-                  **kwargs}
+        kwargs = {
+            **dict(
+                total=total,
+                desc="Saving frames",
+                ncols=0,
+                unit="frame",
+                leave=False,
+                disable=not pbar,
+            ),
+            **kwargs,
+        }
         return tqdm(*args, **kwargs)
 
     def work(it):
@@ -1070,6 +1085,7 @@ def make_cax(ax: Axes):
     plt.sca(ax)
     return cax
 
+
 class ContourPlot[DataType: MeshData](Plot, ABC):
     """
     Abstract base class for contour plots.
@@ -1088,8 +1104,8 @@ class ContourPlot[DataType: MeshData](Plot, ABC):
         ax: (Axes | None) = None,
         cbar: (Axes | bool) = False,
         formatter: PlotFormatterBase | str | None = None,
-        **kwargs
-        ):
+        **kwargs,
+    ):
         """
         Initialize the contour plot.
 
@@ -1115,7 +1131,7 @@ class ContourPlot[DataType: MeshData](Plot, ABC):
         self.converted_x_grid = self.formatter.convert_coordinate(data.sampling[0], self.x_grid)
         self.converted_y_grid = self.formatter.convert_coordinate(data.sampling[1], self.y_grid)
 
-        self.grid = np.stack(np.meshgrid(self.x_grid, self.y_grid, indexing='ij'), axis=-1)
+        self.grid = np.stack(np.meshgrid(self.x_grid, self.y_grid, indexing="ij"), axis=-1)
 
         self.contours = None
 
@@ -1174,16 +1190,18 @@ class ContourPlot[DataType: MeshData](Plot, ABC):
         """
         self.clean()
 
-        data = self.data.interp(self.grid, time=time+self.t_off)
+        data = self.data.interp(self.grid, time=time + self.t_off)
         data = self.formatter.convert_data(self.data.var, data)
         *_, actual_time = self.data.load_data(time)
 
         self.kwargs = update_color_kwargs(self.data.var, self.kwargs, data=data)
-        if self.kwargs.get('colors', None) is not None:
-            self.kwargs.pop('cmap', None)
+        if self.kwargs.get("colors", None) is not None:
+            self.kwargs.pop("cmap", None)
 
-        self.ax.set_title(self.formatter.format_title(self.data.var, actual_time-self.t_off))
-        coords = np.meshgrid(self.converted_x_grid, self.converted_y_grid, indexing='ij')
+        # Don't clobber a title another plot sharing these axes already set.
+        if self.ax.get_title() == "":
+            self.ax.set_title(self.formatter.format_title(self.data.var, actual_time - self.t_off))
+        coords = np.meshgrid(self.converted_x_grid, self.converted_y_grid, indexing="ij")
 
         self.contours = self.ax.contour(*coords, data, **self.kwargs)
 
@@ -1226,17 +1244,17 @@ class NativeContourPlot(ContourPlot[Native]):
         self,
         sim: "Simulation",
         var: str,
-        sampling: Sampling = ('x1v', 'x2v'),
+        sampling: Sampling = ("x1v", "x2v"),
         bounds: float | tuple[float, float, float, float] = 10.0,
         N_points: int | tuple[int, int] = 200,
         t_merg_offset: bool = True,
-        **kwargs
-        ):
+        **kwargs,
+    ):
         data = Native(sim, var, sampling)
         if "t_merg" in sim.md and t_merg_offset:
             self.t_off = sim.md["t_merg"]
-        super().__init__(data=data, bounds=bounds,
-                         N_points=N_points, **kwargs)
+        super().__init__(data=data, bounds=bounds, N_points=N_points, **kwargs)
+
 
 class DerivedContourPlot(ContourPlot[Derived]):
     """
@@ -1271,14 +1289,13 @@ class DerivedContourPlot(ContourPlot[Derived]):
         var: str,
         depends: tuple[str, ...],
         definition: Callable,
-        sampling: Sampling = ('x1v', 'x2v'),
+        sampling: Sampling = ("x1v", "x2v"),
         bounds: float | tuple[float, float, float, float] = 10.0,
         N_points: int | tuple[int, int] = 200,
         t_merg_offset: bool = True,
-        **kwargs
-        ):
+        **kwargs,
+    ):
         data = Derived(sim, var, depends, definition, sampling)
         if "t_merg" in sim.md and t_merg_offset:
             self.t_off = sim.md["t_merg"]
-        super().__init__(data=data, bounds=bounds,
-                         N_points=N_points, **kwargs)
+        super().__init__(data=data, bounds=bounds, N_points=N_points, **kwargs)

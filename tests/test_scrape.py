@@ -4,15 +4,11 @@ import os
 import shutil
 
 import h5py
-import numpy as np
 import pytest
 
 from yaaps.scrape import AthdfScraper, IterationNotAvailable, find_restart_dirs
 
-FIXTURE = (
-    "/home/mjacobi/Documents/Projects/LongOEjecta/tracer_test/files/"
-    "Blast.out2.00000.athdf"
-)
+FIXTURE = "/home/mjacobi/Documents/Projects/LongOEjecta/tracer_test/files/Blast.out2.00000.athdf"
 N_B = (20, 20, 20)  # matches the fixture's MeshBlockSize
 
 pytestmark = pytest.mark.skipif(
@@ -119,6 +115,16 @@ class TestCache:
         second_count = counts["n"]
 
         assert second_count < first_count
+
+        # simulate sshfs: stat mtimes truncated to whole seconds must still
+        # hit the cache (which stores the full-precision local mtime)
+        for fn in os.listdir(str(d)):
+            if fn.endswith(".athdf"):
+                m = int(os.path.getmtime(str(d / fn)))
+                os.utime(str(d / fn), (m, m))
+        counts["n"] = 0
+        AthdfScraper(str(d), N_B=N_B)
+        assert counts["n"] == second_count
 
     def test_cache_invalidated_on_n_b_mismatch(self, tmp_path):
         d = tmp_path / "sim"
