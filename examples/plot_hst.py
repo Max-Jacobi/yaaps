@@ -252,6 +252,8 @@ for var, ax in zip(vars, axs.flat, strict=False):
                 plot(var, ax, sim, c=c, label=name)
         except FileNotFoundError:
             print(f"No hst file in {sim.path}, skipping", file=sys.stderr)
+        except KeyError:
+            print(f"{var} not found in {sim.path}, skipping", file=sys.stderr)
     ax.set_xlabel(args.xvar)
 
     if isinstance(var, list):
