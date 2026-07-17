@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "ruff"]
 
 [tool.setuptools]
 include-package-data = true
@@ -29,3 +29,21 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["yaaps*"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["yaaps/athena_read.py"]  # vendored Athena++ code, keep diffable upstream
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # import sorting
+    "B",        # bugbear
+    "NPY",      # numpy-specific rules
+    "UP",       # pyupgrade
+]
+ignore = [
+    "E741",     # ambiguous variable names — physics code legitimately uses l, I
+]
