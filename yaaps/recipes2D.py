@@ -27,6 +27,77 @@ def det(gxx, gxy, gxz, gyy, gyz, gzz):
     return -(gxz**2) * gyy + 2 * gxy * gxz * gyz - gxx * (gyz**2) - (gxy**2) * gzz + gxx * gyy * gzz
 
 
+def ye_equilibrium(
+    ye,
+    eta_nue,
+    kap_nue,
+    n_nue,
+    eta_nua,
+    kap_nua,
+    n_nua,
+    *gd,
+    kap_eff_min=1e-6,
+):
+    """
+    Local weak-equilibrium electron fraction from the M1 radiation fields.
+
+    The GR-Athena++ M1 lepton-number source (m1_sources.cpp, m1_utils.hpp
+    sources_sc_nG) is
+
+        D dY_e/dt = m_b [S_n(nuebar) - S_n(nue)],
+        S_n(s) = sqrt(gamma) eta_0^s - kap_a_0^s n_s,
+
+    so Y_e is raised by nue absorption on neutrons and positron capture on
+    neutrons, and lowered by nuebar absorption on protons and electron capture
+    on protons. With the weakrates rates (weak_emission.cpp, weak_opacity.cpp)
+    each group scales with the free nucleon fractions,
+
+        kap_a_0^nue, eta_0^nuebar ~ eta_np ~ (1 - Y_e),
+        kap_a_0^nuebar, eta_0^nue ~ eta_pn ~ Y_e,
+
+    hence, with P = kap_a_0^nue n_nue + sqrt(gamma) eta_0^nuebar = p (1 - Y_e)
+    and M = kap_a_0^nuebar n_nuebar + sqrt(gamma) eta_0^nue = m Y_e, the fixed
+    point p (1 - Y_e^eq) = m Y_e^eq gives
+
+        Y_e^eq = P Y_e / [P Y_e + M (1 - Y_e)].
+
+    In the optically thin, emission-free limit this reduces to the familiar
+    Y_e^eq = 1 / (1 + L_nuebar eps_nuebar / (L_nue eps_nue)) (Qian & Woosley
+    1996, eq. 77; Foucart 2024, arXiv:2410.03646, eq. 11).
+
+    Note that M1.rad.sc_n_* is the densitized fluid-frame number density
+    (sqrt(gamma) n), which is why only the emissivities carry sqrt(gamma).
+
+    Args:
+        ye: Electron fraction (passive_scalar.r_0).
+        eta_nue: nue number emissivity (M1.radmat.sc_eta_0_00).
+        kap_nue: nue number absorption opacity (M1.radmat.sc_kap_a_0_00).
+        n_nue: densitized nue number density (M1.rad.sc_n_00).
+        eta_nua: nuebar number emissivity (M1.radmat.sc_eta_0_01).
+        kap_nua: nuebar number absorption opacity (M1.radmat.sc_kap_a_0_01).
+        n_nua: densitized nuebar number density (M1.rad.sc_n_01).
+        *gd: The six components of the covariant 3-metric
+            (gxx, gxy, gxz, gyy, gyz, gzz), for sqrt(gamma).
+        kap_eff_min: Mask threshold on the effective interaction opacity
+            (P + M) / (n_nue + n_nuebar), in code units. Cells below it are
+            NaN. This removes (i) the atmosphere, where the weakrates tables
+            return exactly zero below rho_min/temp_min, and (ii) the cold,
+            dense, strongly degenerate remnant core, where Pauli blocking
+            suppresses emission and absorption by ~20 orders of magnitude
+            and the balance degenerates into numerical noise. Set to 0 to
+            disable the mask.
+
+    Returns:
+        The equilibrium electron fraction, NaN where undetermined.
+    """
+    sqrt_g = np.sqrt(np.abs(det(*gd)))
+    plus = kap_nue * n_nue + sqrt_g * eta_nua  # raises Y_e, ~ (1 - Y_e)
+    minus = kap_nua * n_nua + sqrt_g * eta_nue  # lowers Y_e, ~ Y_e
+    den = plus * ye + minus * (1 - ye)
+    ok = (den > 0) & (plus + minus > kap_eff_min * (n_nue + n_nua))
+    return np.where(ok, plus * ye / np.where(ok, den, 1), np.nan)
+
+
 def gup(gxx, gxy, gxz, gyy, gyz, gzz):
     """
     Compute the inverse (contravariant) components of a 3x3 symmetric metric tensor.

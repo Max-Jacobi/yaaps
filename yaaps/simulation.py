@@ -86,7 +86,9 @@ class Simulation:
                         try:
                             self.input = Input(os.path.join(restart_dir, file))
                             break
-                        except ValueError:
+                        except (ValueError, OSError):
+                            # OSError: unreadable/broken restart symlinks are
+                            # common on network mounts (sshfs) - just skip them.
                             ...
                 else:
                     continue
