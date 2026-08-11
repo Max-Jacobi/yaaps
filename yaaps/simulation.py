@@ -113,7 +113,7 @@ class Simulation:
             for i_track in range(5):
                 if f"trackers_extrema/ref_level_{i_track}" not in self.input:
                     break
-                if f"trackers_extrema/ref_type_{i_track}" == 2:
+                if self.input[f"trackers_extrema/ref_type_{i_track}"][0] == 2:
                     continue
                 rl = max(rl, self.input[f"trackers_extrema/ref_level_{i_track}"][0])
         self.dx: list[float] = []
@@ -245,10 +245,13 @@ class Simulation:
         if len(candidates) == 0:
             raise ValueError(f"Can't complete variable {var}.")
         vcan = [(vv, samp, gh) for vv, samp, gh in candidates if samp == sampling]
-        if len(vcan) > 1:
+        if len({vv for vv, *_ in vcan}) > 1:
             raise ValueError(
                 f"More than one completion of {var} available: {[v for v, *_ in vcan]}"
             )
+        # same variable in multiple files (e.g. with and without ghosts):
+        # any of them works, prefer the one without ghosts
+        vcan.sort(key=lambda c: bool(c[2]))
         if len(vcan) == 0:
             raise ValueError(
                 f"Sampling {sampling} not available for variable {var}.\n"
@@ -398,7 +401,7 @@ def _read_ascii(path: str) -> dict:
         sorted and deduplicated by time/iteration.
     """
     with open(path) as f:
-        line = "#"
+        header = line = "#"
         while line.startswith("#"):
             header = line
             line = f.readline()

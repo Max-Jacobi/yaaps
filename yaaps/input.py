@@ -46,6 +46,7 @@ class Input(Mapping):
         self.data = {}
         current_section = None
 
+        key = ""
         value = ""
         in_list = False
         with open(file_path, errors="replace") as inp:
@@ -94,7 +95,7 @@ class Input(Mapping):
             else:
                 raise RuntimeError("Could not read input file")
 
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> Any:
         """
         Get a parameter value using slash-separated key notation.
 
