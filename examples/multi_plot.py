@@ -1,4 +1,5 @@
 import argparse
+import math
 import os
 import tempfile
 
@@ -88,8 +89,19 @@ sim_labels = {
 }
 
 n = len(sims)
-fig, axs = plt.subplots(1, n, figsize=(4 * n, 3.5), sharey=True, constrained_layout=True)
-axs = np.atleast_1d(axs)
+ncols = math.ceil(math.sqrt(n))
+nrows = math.ceil(n / ncols)
+fig, axs = plt.subplots(
+    nrows,
+    ncols,
+    figsize=(4 * ncols, 3.5 * nrows),
+    sharex=True,
+    sharey=True,
+    constrained_layout=True,
+)
+axs = np.atleast_1d(axs).ravel()
+for ax in axs[n:]:
+    ax.set_visible(False)
 
 plots = [
     yp.NativeColorPlot(
@@ -129,17 +141,32 @@ for plot, actual_time, ax, sim in zip(plots, actual_times, axs, sims, strict=Fal
     t_show = actual_time - plot.t_off
     if args.paper_format:
         scale, unit = formatter.unit_converter.get_conversion("time")
-        title_time = f"$t = {t_show * scale:.1f}$ {unit.strip()}"
+        title_time = f"$t = {t_show * scale:.1f}$ {unit.strip().strip('[]')}"
     else:
         title_time = f"t = {t_show:.1f}"
-    ax.set_title(f"{sim_labels[sim.path]} @ {title_time}")
-for ax in axs[1:]:
-    ax.set_ylabel("")
+    ax.set_title(sim_labels[sim.path])
+    ax.text(
+        0.02,
+        0.98,
+        title_time,
+        transform=ax.transAxes,
+        ha="left",
+        va="top",
+        bbox=dict(facecolor="white", alpha=0.6, edgecolor="none"),
+    )
+for i, ax in enumerate(axs[:n]):
+    if i % ncols:
+        ax.set_ylabel("")
+    if i + ncols < n:
+        ax.set_xlabel("")
 
+# a single parent axes makes the default colorbar width huge
+cbar_kwargs: dict = {"fraction": 0.05} if n == 1 else {}
 fig.colorbar(
     plots[-1].ims[-1],
     ax=list(axs),
     label=formatter.format_colorbar_label(plots[0].data.var),
+    **cbar_kwargs,
 )
 
 if args.boundary is not None:
