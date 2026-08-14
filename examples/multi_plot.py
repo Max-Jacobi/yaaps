@@ -38,6 +38,11 @@ ap.add_argument("--vmax", type=float, default=None, help="Maximum of the colorsc
 ap.add_argument(
     "-p", "--paper-format", action="store_true", help="Use paper-ready and units format for labels"
 )
+ap.add_argument(
+    "--sync-time",
+    action="store_true",
+    help="Plot all sims at the same time: the smallest of their maximum available times",
+)
 
 args = ap.parse_args()
 
@@ -116,6 +121,10 @@ plots = [
     )
     for sim, ax in zip(sims, axs, strict=False)
 ]
+
+if args.sync_time:
+    # t_off shifts each sim into a common frame, so compare max times there
+    args.time = min(p.data.time_range.max() - p.t_off for p in plots)
 
 # Probe all sims at the target time to build one norm shared by every panel
 # (a string norm would autoscale each panel independently).
