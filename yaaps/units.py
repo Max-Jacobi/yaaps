@@ -27,6 +27,10 @@ import re
 # The conversion factor converts from code units to the displayed units.
 # Keys can be strings (matched by endswith) or compiled regex patterns.
 units: dict[str | re.Pattern, tuple[float, str]] = {
+    # Dimensionless .hst columns that would otherwise be claimed by a generic
+    # suffix key below ("r" -> km). Patterns are matched with re.match, so
+    # these are anchored and cannot leak onto other names.
+    re.compile("(max_abs|L1)_Xcons_err$"): (1.0, ""),
     "rho": (6.175828477586656e17, " [g cm$^{-3}$]"),
     "aux.e": (6.175828477586656e17, " [g cm$^{-3}$]"),
     "aux.T": (1.0, " [MeV]"),
@@ -49,6 +53,14 @@ units: dict[str | re.Pattern, tuple[float, str]] = {
     re.compile("util_u"): (1.0, r" [$c$]"),
     re.compile("vel"): (1.0, r" [$c$]"),
     re.compile("x[1-3][vf]?"): (1.4766250382504018, " [km]"),
+    # history (.hst) columns. max_rho/min_rho already match "rho" by suffix;
+    # the RHINE slots are volume-integrated code-unit rates (energy per time,
+    # see gr-athena outputs/history.cpp).
+    "max_T": (1.0, " [MeV]"),
+    "min_T": (1.0, " [MeV]"),
+    "rhine-qdot": (3.628132869648639e59, " [erg s$^{-1}$]"),
+    "rhine-Lfnu": (3.628132869648639e59, " [erg s$^{-1}$]"),
+    "dt": (0.004925490948309319, " [ms]"),
 }
 
 
@@ -187,6 +199,23 @@ class FieldLabels:
             "field.aux.b_u_1": r"$b^x$",
             "field.aux.b_u_2": r"$b^y$",
             "field.aux.b_u_3": r"$b^z$",
+            # history (.hst) columns
+            "dt": r"$\Delta t$",
+            "N_MeshBlock": r"$N_{\mathrm{MB}}$",
+            "mass": r"$M_{\mathrm{b}}$",
+            "max_rho": r"$\rho_{\max}$",
+            "max_T": r"$T_{\max}$",
+            "min_alpha": r"$\alpha_{\min}$",
+            "num_c2p_fail": r"$N_{\mathrm{c2p\,fail}}$",
+            "H-norm2": r"$||H||_2$",
+            "M-norm2": r"$||M||_2$",
+            "E_int": r"$E_{\mathrm{int}}$",
+            "E_kin": r"$E_{\mathrm{kin}}$",
+            "m_ej_geod": r"$M_{\mathrm{ej}}^{\mathrm{geod}}$",
+            "m_ej_bern": r"$M_{\mathrm{ej}}^{\mathrm{bern}}$",
+            "rhine-qdot": r"$\dot{Q}_{\mathrm{RHINE}}$",
+            "rhine-Lfnu": r"$L_{\nu}^{f_{\nu}}$",
+            "max_abs_Xcons_err": r"$\max|\Delta X_{\mathrm{cons}}|$",
         }
 
     def get_label(self, field_name: str) -> str:

@@ -36,6 +36,17 @@ xvar = "time"
 # xlog = false
 # no_auto_log = false
 # dpi = 200
+
+# "paper" converts both axes to physical units (ms, g cm^-3, erg s^-1, ...)
+# and uses LaTeX labels; "raw" (the default) keeps code units.
+# formatter = "paper"
+
+# Shift each simulation's time axis by its own metadata.json "t_merg", so runs
+# with different inspiral lengths line up at the merger. On by default, and a
+# no-op for runs whose metadata.json has no t_merg (or has no metadata.json).
+# Legend labels and line colours/widths also come from metadata.json
+# ("label"/"name", "color", "linewidth") when present.
+# t_merg_offset = true
 # figsize = [14, 8]   # [width, height] in inches
 
 # Colors for each simulation (auto-generated if omitted)

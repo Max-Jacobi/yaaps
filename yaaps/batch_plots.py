@@ -47,6 +47,7 @@ except ModuleNotFoundError:
 import yaaps as ya  # noqa: E402
 import yaaps.plot2D as yp  # noqa: E402
 from yaaps.datatypes import Native  # noqa: E402
+from yaaps.plot_formatter import PlotFormatter  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Utility helpers
@@ -333,6 +334,17 @@ def _plot_hst(
     funcs_cfg = cfg.get("funcs", {})
     dpi = cfg.get("dpi", 200)
     figsize = cfg.get("figsize", None)
+    # "paper" converts both axes to physical units (see yaaps.units); "raw"
+    # (the default) leaves code units, so the conversion calls below are
+    # no-ops there and need no branching.
+    formatter = PlotFormatter(cfg.get("formatter", "raw"))
+    # Shift each simulation's time axis by its own metadata.json t_merg, so
+    # runs with different inspiral lengths line up at the merger.
+    t_merg_offset = (
+        cfg.get("t_merg_offset", True)
+        and xvar == "time"
+        and any("t_merg" in sim.md for sim in sims)
+    )
 
     auto_log_keys = [
         "mass",
@@ -387,10 +399,29 @@ def _plot_hst(
         common_path = os.path.commonpath(label_roots)
     else:
         common_path = os.path.dirname(label_roots[0])
+    # metadata.json wins over the directory name: "label" (LaTeX legend text),
+    # then "name", then the path-derived fallback.
     sim_labels = {
-        sim.path: root.replace(common_path, "").strip("/")
+        sim.path: sim.md.get("label")
+        or sim.md.get("name")
+        or root.replace(common_path, "").strip("/")
         for sim, root in zip(sims, label_roots, strict=False)
     }
+    sim_lws = {sim.path: sim.md.get("linewidth", plt.rcParams["lines.linewidth"]) for sim in sims}
+
+    def _xdata(sim, src):
+        x = np.asarray(src[xvar], dtype=float)
+        if t_merg_offset:
+            x = x - sim.md.get("t_merg", 0.0)
+        return formatter.convert_coordinate(xvar, x)
+
+    def _ydata(sim, src, var):
+        data = src[var]
+        if var in funcs and funcs[var] is not None:
+            # a func changes the meaning of the column (relabs, diff, ...), so
+            # its result is no longer in the column's units
+            return funcs[var](data)
+        return formatter.convert_data(var, data)
 
     warnings: list[Warning_] = []
     subplot_has_data: list[bool] = []
@@ -404,7 +435,7 @@ def _plot_hst(
                     label = v if sim is sims[0] else None
                     try:
                         src = sim.hst
-                        data = src[v]
+                        x, data = _xdata(sim, src), _ydata(sim, src, v)
                     except (FileNotFoundError, KeyError) as exc:
                         warnings.append(
                             (
@@ -413,14 +444,12 @@ def _plot_hst(
                             )
                         )
                         continue
-                    if v in funcs and funcs[v] is not None:
-                        data = funcs[v](data)
-                    ax.plot(src[xvar], data, c=c, ls=ls, label=label)
+                    ax.plot(x, data, c=c, ls=ls, label=label, lw=sim_lws[sim.path])
                     any_line = True
             else:
                 try:
                     src = sim.hst
-                    data = src[var]
+                    x, data = _xdata(sim, src), _ydata(sim, src, var)
                 except (FileNotFoundError, KeyError) as exc:
                     warnings.append(
                         (
@@ -429,9 +458,7 @@ def _plot_hst(
                         )
                     )
                     continue
-                if var in funcs and funcs[var] is not None:
-                    data = funcs[var](data)
-                ax.plot(src[xvar], data, c=c, label=name)
+                ax.plot(x, data, c=c, label=name, lw=sim_lws[sim.path])
                 any_line = True
         subplot_has_data.append(any_line)
 
@@ -439,17 +466,20 @@ def _plot_hst(
             _blank_axis(ax, title=var if isinstance(var, str) else " ".join(var))
             continue
 
-        ax.set_xlabel(xvar)
+        xlabel = formatter.format_axis_label(xvar)
+        if t_merg_offset:
+            xlabel = xlabel.replace("$t$", r"$t - t_{\mathrm{merg}}$", 1)
+        ax.set_xlabel(xlabel)
 
         if isinstance(var, list):
-            ylabel = " ".join(var)
+            ylabel = " ".join(formatter.format_axis_label(v) for v in var)
             ax.set_ylabel(ylabel)
             for v in var:
                 if v in ylog_vars or (not no_auto_log and v in auto_log_keys):
                     ax.set_yscale("log")
                     break
         else:
-            ylabel = var
+            ylabel = formatter.format_axis_label(var)
             if var in func_names:
                 ylabel = f"{func_names[var]}({var})"
             ax.set_ylabel(ylabel)

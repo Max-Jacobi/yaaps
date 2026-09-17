@@ -117,13 +117,15 @@ python examples/plot_hst.py max_rho -s /path/to/sim_A /path/to/sim_B
 | `vars` | — | `max_rho` | Variables to plot. Multiple variables create a grid of subplots. Comma-separated values in a single entry are overlaid on one subplot. Prefix with `hor/`, `tra/`, or `wav/` to disambiguate sources. |
 | `--simdir` | `-s` | `active` | One or more simulation directories. Multiple produce overlaid lines per subplot. |
 | `--xvar` | `-v` | `time` | Quantity for the x-axis. |
-| `--colors` | `-c` | auto | Line colours for each simulation. |
+| `--colors` | `-c` | auto | Line colours for each simulation. Defaults to `metadata.json` `color`, then the matplotlib cycle. |
 | `--funcs` | `-f` | — | Transform functions in the form `var:expr`, e.g., `max_rho:lambda d: d*1e-14`. |
 | `--ylog` | — | — | Variables to put on a log y-axis. |
 | `--ylim` | — | — | Y-axis limits as `var:min:max`. |
 | `--xlog` | — | `False` | Log-scale the x-axis. |
 | `--xlim` | — | — | X-axis limits `min max`. |
 | `--no-auto-log` | — | `False` | Disable automatic log scaling for mass and neutrino quantities. |
+| `--formatter` | — | `raw` | `paper` converts both axes to physical units (ms, g cm<sup>-3</sup>, erg s<sup>-1</sup>, …) and uses LaTeX labels. A column with a `--funcs` transform is left unconverted. |
+| `--no-t-merg-offset` | — | `False` | Plot absolute time. By default each simulation's time axis is shifted by its own `metadata.json` `t_merg`, when that key exists. |
 | `--horizon_ind` | `-a` | `0` | Horizon index for horizon quantities. |
 | `--tracker_ind` | `-r` | `1` | Tracker index for tracer quantities. |
 | `--wave_rad` | `-w` | `200` | Extraction radius for waveform quantities. |
