@@ -70,6 +70,17 @@ _color_kwargs_default: dict[str, Callable[[dict], dict]] = {
     "M1.radmat.sc_kap_s_00": _update_defaults(cmap="plasma", norm="log"),
     "M1.radmat.sc_kap_s_01": _update_defaults(cmap="plasma", norm="log"),
     "M1.radmat.sc_kap_s_02": _update_defaults(cmap="plasma", norm="log"),
+    # RHINE / transition EOS (signed rates diverge around zero)
+    "hydro.aux.heating_rate": _update_defaults(cmap="RdBu_r", norm="asinh"),
+    "hydro.aux.qdot_code": _update_defaults(cmap="RdBu_r", norm="asinh"),
+    "hydro.aux.fnu_lum": _update_defaults(cmap="inferno", norm="log"),
+    "hydro.aux.transition_w": _update_defaults(cmap="cividis", norm="lin", vmin=0, vmax=1),
+    "hydro.aux.X_err": _update_defaults(cmap="magma", norm="log"),
+    "hydro.aux.fnu": _update_defaults(cmap="viridis", norm="lin", vmin=0, vmax=0.5),
+    **{
+        f"hydro.aux.rhine_{k}": _update_defaults(cmap="RdBu_r", norm="asinh")
+        for k in ("dye", "dyn", "dyp", "dya", "dyh", "dah", "dma")
+    },
     "geom.con.H": _update_defaults(cmap="cubehelix", norm="log"),
     "geom.con.M": _update_defaults(cmap="cubehelix", norm="log"),
     "geom.con.C": _update_defaults(cmap="cubehelix", norm="log"),

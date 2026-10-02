@@ -31,6 +31,18 @@ units: dict[str | re.Pattern, tuple[float, str]] = {
     # suffix key below ("r" -> km). Patterns are matched with re.match, so
     # these are anchored and cannot leak onto other names.
     re.compile("(max_abs|L1)_Xcons_err$"): (1.0, ""),
+    # RHINE / transition-EOS derived fields (gr-athena eos_utils.cpp). Listed
+    # before the generic suffix keys so e.g. X_err is not claimed by "r" (km).
+    # heating_rate and the rhine_d* rates are written in physical units already;
+    # qdot_code / fnu_lum are densitized code rates (energy per time per volume).
+    "hydro.aux.heating_rate": (1.0, r" [erg cm$^{-3}$ s$^{-1}$]"),
+    "hydro.aux.qdot_code": (5.550725674743868e38 / 4.925490948309319e-6, r" [erg cm$^{-3}$ s$^{-1}$]"),
+    "hydro.aux.fnu_lum": (5.550725674743868e38 / 4.925490948309319e-6, r" [erg cm$^{-3}$ s$^{-1}$]"),
+    "hydro.aux.transition_w": (1.0, ""),
+    "hydro.aux.X_err": (1.0, ""),
+    "hydro.aux.fnu": (1.0, ""),
+    re.compile(r"hydro\.aux\.rhine_d(ye|yn|yp|ya|yh|ah)$"): (1.0, r" [s$^{-1}$]"),
+    "hydro.aux.rhine_dma": (1.0, r" [MeV s$^{-1}$]"),
     "rho": (6.175828477586656e17, " [g cm$^{-3}$]"),
     "aux.e": (6.175828477586656e17, " [g cm$^{-3}$]"),
     "aux.T": (1.0, " [MeV]"),
@@ -199,6 +211,20 @@ class FieldLabels:
             "field.aux.b_u_1": r"$b^x$",
             "field.aux.b_u_2": r"$b^y$",
             "field.aux.b_u_3": r"$b^z$",
+            # RHINE / transition EOS
+            "hydro.aux.heating_rate": r"$\dot{q}_{\mathrm{RHINE}}$",
+            "hydro.aux.qdot_code": r"$\alpha\sqrt{\gamma}\,\dot{q}$",
+            "hydro.aux.fnu_lum": r"$\alpha\sqrt{\gamma}\,\dot{q}_{\nu}$",
+            "hydro.aux.transition_w": r"$w_{\mathrm{NSE}}$",
+            "hydro.aux.X_err": r"$\Delta X$",
+            "hydro.aux.fnu": r"$f_{\nu}$",
+            "hydro.aux.rhine_dye": r"$\dot{Y}_e$",
+            "hydro.aux.rhine_dyn": r"$\dot{Y}_n$",
+            "hydro.aux.rhine_dyp": r"$\dot{Y}_p$",
+            "hydro.aux.rhine_dya": r"$\dot{Y}_\alpha$",
+            "hydro.aux.rhine_dyh": r"$\dot{Y}_h$",
+            "hydro.aux.rhine_dah": r"$\dot{A}_h$",
+            "hydro.aux.rhine_dma": r"$\dot{\tilde{m}}$",
             # history (.hst) columns
             "dt": r"$\Delta t$",
             "N_MeshBlock": r"$N_{\mathrm{MB}}$",
