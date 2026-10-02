@@ -99,12 +99,11 @@ ap.add_argument(
 )
 ap.add_argument("--no-legend", action="store_true", help="Disable legend for simulations")
 ap.add_argument(
-    "--formatter",
-    type=str,
-    default="raw",
-    choices=("raw", "paper"),
-    help="'paper' converts both axes to physical units (ms, g/cm^3, erg/s, ...) "
-    "and uses LaTeX labels; 'raw' keeps code units.",
+    "-p",
+    "--paper-format",
+    action="store_true",
+    help="Use paper-ready and units format for labels: converts both axes to physical "
+    "units (ms, g/cm^3, erg/s, ...) and uses LaTeX labels.",
 )
 ap.add_argument(
     "--no-t-merg-offset",
@@ -145,7 +144,7 @@ if args.colors is None:
 elif len(sims) > len(args.colors):
     raise ValueError("Not enough colors for simulations")
 
-formatter = PlotFormatter(args.formatter)
+formatter = PlotFormatter("paper" if args.paper_format else "raw")
 t_merg_offset = (
     not args.no_t_merg_offset and args.xvar == "time" and any("t_merg" in sim.md for sim in sims)
 )

@@ -124,7 +124,7 @@ python examples/plot_hst.py max_rho -s /path/to/sim_A /path/to/sim_B
 | `--xlog` | — | `False` | Log-scale the x-axis. |
 | `--xlim` | — | — | X-axis limits `min max`. |
 | `--no-auto-log` | — | `False` | Disable automatic log scaling for mass and neutrino quantities. |
-| `--formatter` | — | `raw` | `paper` converts both axes to physical units (ms, g cm<sup>-3</sup>, erg s<sup>-1</sup>, …) and uses LaTeX labels. A column with a `--funcs` transform is left unconverted. |
+| `--paper-format` | `-p` | `False` | Converts both axes to physical units (ms, g cm<sup>-3</sup>, erg s<sup>-1</sup>, …) and uses LaTeX labels. A column with a `--funcs` transform is left unconverted. |
 | `--no-t-merg-offset` | — | `False` | Plot absolute time. By default each simulation's time axis is shifted by its own `metadata.json` `t_merg`, when that key exists. |
 | `--horizon_ind` | `-a` | `0` | Horizon index for horizon quantities. |
 | `--tracker_ind` | `-r` | `1` | Tracker index for tracer quantities. |
