@@ -202,22 +202,37 @@ func_names = {var: f for var, f in map(lambda s: s.split(":"), args.funcs)}
 funcs = {var: eval_f(f) for var, f in func_names.items()}
 
 
+unit_aware_funcs = {"None", "id", "relabs", "absrel", "absdiff", "diff", "inv", "abs", "ddt"}
+
+
+def _unit(name: str) -> str:
+    """Display unit of name without brackets, e.g. "ms"; "" in raw mode."""
+    if formatter.mode == "raw":
+        return ""
+    unit = formatter.unit_converter.get_conversion(name)[1].strip()
+    return unit.removeprefix("[").removesuffix("]")
+
+
+def _name(name: str) -> str:
+    return name if formatter.mode == "raw" else formatter.field_labels.get_label(name)
+
+
 def func_label(var: str) -> str:
     f = func_names.get(var, "None")
-    if f in ["None", "id"]:
-        return var
-    if f in ("relabs", "absrel"):
-        return f"|{var}/ {var}[0] - 1|"
-    if f == "absdiff":
-        return f"|{var} - {var}[0]|"
-    if f == "diff":
-        return f"{var} - {var}[0]"
-    if f == "inv":
-        return f"1/{var}"
-    if f == "abs":
-        return f"|{var}|"
-    if f == "ddt":
-        return f"d{var}/dt"
+    if f in unit_aware_funcs:
+        v, u, xu = _name(var), _unit(var), _unit(args.xvar)
+        label, unit = {
+            "None": (v, u),
+            "id": (v, u),
+            "relabs": (f"|{v}/ {v}[0] - 1|", ""),
+            "absrel": (f"|{v}/ {v}[0] - 1|", ""),
+            "absdiff": (f"|{v} - {v}[0]|", u),
+            "diff": (f"{v} - {v}[0]", u),
+            "inv": (f"1/{v}", f"({u})$^{{-1}}$" if u else ""),
+            "abs": (f"|{v}|", u),
+            "ddt": (f"d{v}/d{_name(args.xvar)}", f"{u} {xu}$^{{-1}}$".strip() if xu else u),
+        }[f]
+        return f"{label} [{unit}]" if unit else label
     if f.startswith("lambda"):
         return f"λ({var})"
     if f.startswith("np."):
@@ -279,12 +294,13 @@ def plot(var, ax, sim, **kw):
     x = formatter.convert_coordinate(args.xvar, x)
 
     key = f"{src_label}/{var}" if f"{src_label}/{var}" in funcs else var
-    if key in funcs:
-        # a func changes the meaning of the column, so its result is no longer
-        # in the column's units and must not be converted
-        data = apply_func(funcs[key], data, x)
-    else:
+    # builtin funcs have known units (see func_label), so convert first and let
+    # ddt differentiate against the already converted x; arbitrary funcs (eval,
+    # numeric scales) stay in code units
+    if func_names.get(key, "None") in unit_aware_funcs:
         data = formatter.convert_data(var, data)
+    if key in funcs:
+        data = apply_func(funcs[key], data, x)
 
     return ax.plot(x, data, **kw)
 
