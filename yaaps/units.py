@@ -31,6 +31,11 @@ units: dict[str | re.Pattern, tuple[float, str]] = {
     # suffix key below ("r" -> km). Patterns are matched with re.match, so
     # these are anchored and cannot leak onto other names.
     re.compile("(max_abs|L1)_Xcons_err$"): (1.0, ""),
+    # .hst passive-scalar integrals int D r_N would end in "r" (km): mass-weighted,
+    # in M_sun; SCMIX (transition EOS, --nscalars=8) is eps in units of the baryon
+    # mass, so its integral is M_sun c^2.
+    re.compile(r"7-scalar$"): (1.7870936689836656e54, " [erg]"),
+    re.compile(r"\d+-scalar$"): (1.0, r" [$M_\odot$]"),
     # RHINE / transition-EOS derived fields (gr-athena eos_utils.cpp). Listed
     # before the generic suffix keys so e.g. X_err is not claimed by "r" (km).
     # heating_rate and the rhine_d* rates are written in physical units already;
@@ -38,6 +43,10 @@ units: dict[str | re.Pattern, tuple[float, str]] = {
     "hydro.aux.heating_rate": (1.0, r" [erg cm$^{-3}$ s$^{-1}$]"),
     "hydro.aux.qdot_code": (5.550725674743868e38 / 4.925490948309319e-6, r" [erg cm$^{-3}$ s$^{-1}$]"),
     "hydro.aux.fnu_lum": (5.550725674743868e38 / 4.925490948309319e-6, r" [erg cm$^{-3}$ s$^{-1}$]"),
+    "hydro.aux.rhine_qphys": (5.550725674743868e38 / 4.925490948309319e-6, r" [erg cm$^{-3}$ s$^{-1}$]"),
+    "hydro.aux.rhine_qexit": (5.550725674743868e38 / 4.925490948309319e-6, r" [erg cm$^{-3}$ s$^{-1}$]"),
+    "hydro.aux.rhine_qreent": (5.550725674743868e38 / 4.925490948309319e-6, r" [erg cm$^{-3}$ s$^{-1}$]"),
+    "hydro.aux.nse_state": (1.0, ""),
     "hydro.aux.transition_w": (1.0, ""),
     "hydro.aux.X_err": (1.0, ""),
     "hydro.aux.fnu": (1.0, ""),
@@ -72,6 +81,10 @@ units: dict[str | re.Pattern, tuple[float, str]] = {
     "min_T": (1.0, " [MeV]"),
     "rhine-qdot": (3.628132869648639e59, " [erg s$^{-1}$]"),
     "rhine-Lfnu": (3.628132869648639e59, " [erg s$^{-1}$]"),
+    "rhine-qphys": (3.628132869648639e59, " [erg s$^{-1}$]"),
+    "rhine-qexit": (3.628132869648639e59, " [erg s$^{-1}$]"),
+    "rhine-qreent": (3.628132869648639e59, " [erg s$^{-1}$]"),
+    "m-nonNSE": (1.0, r" [$M_\odot$]"),
     "dt": (0.004925490948309319, " [ms]"),
 }
 
@@ -225,6 +238,10 @@ class FieldLabels:
             "hydro.aux.rhine_dyh": r"$\dot{Y}_h$",
             "hydro.aux.rhine_dah": r"$\dot{A}_h$",
             "hydro.aux.rhine_dma": r"$\dot{\tilde{m}}$",
+            "hydro.aux.rhine_qphys": r"$\alpha\sqrt{\gamma}\,\dot{q}_{\mathrm{phys}}$",
+            "hydro.aux.rhine_qexit": r"$\alpha\sqrt{\gamma}\,\dot{q}_{\mathrm{exit}}$",
+            "hydro.aux.rhine_qreent": r"$\alpha\sqrt{\gamma}\,\dot{q}_{\mathrm{reent}}$",
+            "hydro.aux.nse_state": r"NSE state",
             # history (.hst) columns
             "dt": r"$\Delta t$",
             "N_MeshBlock": r"$N_{\mathrm{MB}}$",
@@ -241,6 +258,11 @@ class FieldLabels:
             "m_ej_bern": r"$M_{\mathrm{ej}}^{\mathrm{bern}}$",
             "rhine-qdot": r"$\dot{Q}_{\mathrm{RHINE}}$",
             "rhine-Lfnu": r"$L_{\nu}^{f_{\nu}}$",
+            "rhine-qphys": r"$\dot{Q}_{\mathrm{phys}}$",
+            "rhine-qexit": r"$\dot{Q}_{\mathrm{exit}}$",
+            "rhine-qreent": r"$\dot{Q}_{\mathrm{reent}}$",
+            "m-nonNSE": r"$M_{w<1}$",
+            "7-scalar": r"$E_{\mathrm{mix}}$",
             "max_abs_Xcons_err": r"$\max|\Delta X_{\mathrm{cons}}|$",
         }
 
