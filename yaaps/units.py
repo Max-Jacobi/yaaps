@@ -32,9 +32,9 @@ units: dict[str | re.Pattern, tuple[float, str]] = {
     # these are anchored and cannot leak onto other names.
     re.compile("(max_abs|L1)_Xcons_err$"): (1.0, ""),
     # .hst passive-scalar integrals int D r_N would end in "r" (km): mass-weighted,
-    # in M_sun; SCMIX (transition EOS, --nscalars=8) is eps in units of the baryon
-    # mass, so its integral is M_sun c^2.
-    re.compile(r"7-scalar$"): (1.7870936689836656e54, " [erg]"),
+    # in M_sun; SCEB and SCMIX (transition EOS, scalars 6 and 7) are eps in units
+    # of the baryon mass, so their integrals are M_sun c^2.
+    re.compile(r"[67]-scalar$"): (1.7870936689836656e54, " [erg]"),
     re.compile(r"\d+-scalar$"): (1.0, r" [$M_\odot$]"),
     # RHINE / transition-EOS derived fields (gr-athena eos_utils.cpp). Listed
     # before the generic suffix keys so e.g. X_err is not claimed by "r" (km).
@@ -263,6 +263,7 @@ class FieldLabels:
             "rhine-qexit": r"$\dot{Q}_{\mathrm{exit}}$",
             "rhine-qreent": r"$\dot{Q}_{\mathrm{reent}}$",
             "m-nonNSE": r"$M_{w<1}$",
+            "6-scalar": r"$E_{\mathrm{B}}$",
             "7-scalar": r"$E_{\mathrm{mix}}$",
             "max_abs_Xcons_err": r"$\max|\Delta X_{\mathrm{cons}}|$",
         }
