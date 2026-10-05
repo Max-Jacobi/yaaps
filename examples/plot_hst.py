@@ -192,8 +192,21 @@ def eval_f(f: str) -> Callable:
     return func
 
 
+def _n_required(func: Callable) -> int:
+    # Only required positional parameters count: numpy ufuncs (np.abs, ...)
+    # also expose out=, where=, ..., and func(data, x) would write into x.
+    try:
+        params = signature(func).parameters.values()
+    except (TypeError, ValueError):  # builtins without a signature
+        return 1
+    return sum(
+        p.default is p.empty and p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+        for p in params
+    )
+
+
 def apply_func(func: Callable, data: np.ndarray, x: np.ndarray) -> np.ndarray:
-    if len(signature(func).parameters) == 1:
+    if _n_required(func) < 2:
         return func(data)
     return func(data, x)
 
