@@ -211,7 +211,7 @@ def apply_func(func: Callable, data: np.ndarray, x: np.ndarray) -> np.ndarray:
     return func(data, x)
 
 
-func_names = {var: f for var, f in map(lambda s: s.split(":"), args.funcs)}
+func_names = dict(s.split(":", 1) for s in args.funcs)  # lambdas contain ":" themselves
 funcs = {var: eval_f(f) for var, f in func_names.items()}
 
 
