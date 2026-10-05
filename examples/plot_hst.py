@@ -345,6 +345,10 @@ def _label_root(path):
     return path
 
 
+def var_label(var: str) -> str:
+    return func_label(var) if var in func_names else formatter.format_axis_label(var)
+
+
 label_roots = [_label_root(sim.path) for sim in sims]
 if len(label_roots) > 1:
     common_path = os.path.commonpath(label_roots)
@@ -365,10 +369,7 @@ for var, ax in zip(vars, axs.flat, strict=False):
         try:
             if isinstance(var, list):
                 for v, ls in zip(var, ("-", "--", ":", "-."), strict=False):
-                    if sim.path == sims[0].path:
-                        label = v
-                    else:
-                        label = None
+                    label = var_label(v) if sim.path == sims[0].path else None
                     plot(v, ax, sim, c=c, ls=ls, label=label, lw=lw)
             else:
                 plot(var, ax, sim, c=c, label=name, lw=lw)
@@ -382,20 +383,13 @@ for var, ax in zip(vars, axs.flat, strict=False):
     ax.set_xlabel(xlabel)
 
     if isinstance(var, list):
-        ylabel = " ".join(formatter.format_axis_label(v) for v in var)
-        for v in var:
-            if v in func_names:
-                ylabel = ylabel.replace(formatter.format_axis_label(v), func_label(v))
-        ax.set_ylabel(ylabel)
+        # several variables share the axis: names and units go into the legend
         for v in var:
             if v in args.ylog + (auto_log_keys if not args.no_auto_log else []):
                 ax.set_yscale("log")
                 break
     else:
-        ylabel = formatter.format_axis_label(var)
-        if var in func_names:
-            ylabel = func_label(var)
-        ax.set_ylabel(ylabel)
+        ax.set_ylabel(var_label(var))
         if var in args.ylog:
             ax.set_yscale("log")
 
