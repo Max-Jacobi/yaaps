@@ -74,12 +74,12 @@ converter.add_unit("my_var", 1.0e10, r" [custom unit]")
 | Variable / Pattern | Physical Unit | Scale Factor |
 |--------------------|--------------|-------------|
 | `rho` | g cm⁻³ | 6.1758 × 10¹⁷ |
-| `aux.e` | g cm⁻³ | 6.1758 × 10¹⁷ |
+| `aux.e` | erg g⁻¹ | 8.9876 × 10²⁰ |
 | `aux.T` | MeV | 1.0 |
 | `aux.s` | k_B | 1.0 |
 | `eps` | erg g⁻¹ | 8.9876 × 10²⁰ |
 | `P` | erg cm⁻³ | 5.5507 × 10³⁸ |
-| `energy` | erg | 1.7871 × 10⁵³ |
+| `energy` | erg | 1.7871 × 10⁵⁴ |
 | `time` | ms | 4.9255 × 10⁻³ |
 | `r`, `x`, `y`, `z` | km | 1.4766 |
 | `mass` | M☉ | 1.0 |

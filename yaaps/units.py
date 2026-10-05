@@ -53,13 +53,14 @@ units: dict[str | re.Pattern, tuple[float, str]] = {
     re.compile(r"hydro\.aux\.rhine_d(ye|yn|yp|ya|yh|ah)$"): (1.0, r" [s$^{-1}$]"),
     "hydro.aux.rhine_dma": (1.0, r" [MeV s$^{-1}$]"),
     "rho": (6.175828477586656e17, " [g cm$^{-3}$]"),
-    "aux.e": (6.175828477586656e17, " [g cm$^{-3}$]"),
+    # hydro.aux.e is the specific internal energy (IX_SEN), dimensionless in code units
+    "aux.e": (8.9875517873681764e20, " [erg g$^{-1}$]"),
     "aux.T": (1.0, " [MeV]"),
     "aux.s": (1.0, r" [$k_{\mathrm{B}}$]"),
     "eps": (8.9875517873681764e20, " [erg g$^{-1}$]"),
     "P": (5.550725674743868e38, " [erg cm$^{-3}$]"),
     # "mass": (1.988409870967742e+33, " [g]"),
-    "energy": (1.7870936689836656e53, " [erg]"),
+    "energy": (1.7870936689836656e54, " [erg]"),  # M_sun c^2
     "time": (0.004925490948309319, " [ms]"),
     "r": (1.4766250382504018, " [km]"),
     "x": (1.4766250382504018, " [km]"),
