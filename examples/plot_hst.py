@@ -156,6 +156,13 @@ def _diff_eq_len(a, b):
     return r
 
 
+def _cumint(a, b):
+    """Cumulative trapezoid integral of a over b, starting at 0."""
+    r = np.zeros_like(a, dtype=float)
+    r[1:] = np.cumsum(0.5 * (a[1:] + a[:-1]) * np.diff(b))
+    return r
+
+
 def _test_float(f: str) -> bool:
     try:
         float(f)
@@ -182,6 +189,8 @@ def eval_f(f: str) -> Callable:
         return np.abs
     elif f == "ddt":
         return _diff_eq_len
+    elif f == "int":
+        return _cumint
 
     func = eval(f)
     if isinstance(func, (int, float)):
@@ -215,7 +224,7 @@ func_names = dict(s.split(":", 1) for s in args.funcs)  # lambdas contain ":" th
 funcs = {var: eval_f(f) for var, f in func_names.items()}
 
 
-unit_aware_funcs = {"None", "id", "relabs", "absrel", "absdiff", "diff", "inv", "abs", "ddt"}
+unit_aware_funcs = {"None", "id", "relabs", "absrel", "absdiff", "diff", "inv", "abs", "ddt", "int"}
 
 
 def _unit(name: str) -> str:
@@ -244,6 +253,7 @@ def func_label(var: str) -> str:
             "inv": (f"1/{v}", f"({u})$^{{-1}}$" if u else ""),
             "abs": (f"|{v}|", u),
             "ddt": (f"d{v}/d{_name(args.xvar)}", f"{u} {xu}$^{{-1}}$".strip() if xu else u),
+            "int": (f"∫{v} d{_name(args.xvar)}", f"{u} {xu}".strip()),
         }[f]
         return f"{label} [{unit}]" if unit else label
     if f.startswith("lambda"):
