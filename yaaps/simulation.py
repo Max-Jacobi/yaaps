@@ -352,6 +352,11 @@ def _load_ascii_multi(
     if len(found) == 1:
         return loader(found[0][0])
 
+    if any(lines[:header_lines] != found[0][1][:header_lines] for _, lines in found):
+        # the column layout changed between restarts (new code version):
+        # parse each file with its own header and join columns by name
+        return _merge_by_name([loader(fn) for fn, _ in found])
+
     fd, tmp_path = tempfile.mkstemp(suffix=f"_{filename}")
     try:
         with os.fdopen(fd, "w") as out_f:
@@ -360,6 +365,27 @@ def _load_ascii_multi(
         return loader(tmp_path)
     finally:
         os.remove(tmp_path)
+
+
+def _merge_by_name(parts: list) -> dict:
+    """
+    Join per-restart data dicts whose columns differ, matching columns by name.
+
+    A later restart replaces the rows of earlier ones from its first time on
+    (as the concatenated-file path does); columns missing from a restart are
+    NaN there.
+    """
+    names = list(dict.fromkeys(k for part in parts for k in part))
+    merged = {k: np.empty(0) for k in names}
+    for part in parts:
+        n = len(next(iter(part.values()))) if part else 0
+        if "time" in part and n > 0 and len(merged.get("time", [])) > 0:
+            keep = merged["time"] < part["time"][0]
+            merged = {k: v[keep] for k, v in merged.items()}
+        for k in names:
+            v = np.asarray(part[k], dtype=float) if k in part else np.full(n, np.nan)
+            merged[k] = np.concatenate((merged[k], v))
+    return merged
 
 
 def _straighten(data: dict) -> dict:
